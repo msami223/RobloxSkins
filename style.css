@@ -1,0 +1,349 @@
+:root {
+  --bg-dark: #0f172a;
+  /* Deep blue-black */
+  --bg-sidebar: #020617;
+  /* Almost black */
+  --bg-panel: #1e293b;
+  /* Lighter panel */
+  --bg-workspace: #334155;
+  /* Workspace background */
+  --primary: #6366f1;
+  /* Indigo */
+  --primary-hover: #4f46e5;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border: #334155;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  height: 100vh;
+  overflow: hidden;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: 72px 300px 1fr 400px;
+  /* Nav | Panel | Workspace | 3D */
+  height: 100vh;
+}
+
+/* 1. Sidebar Nav */
+.sidebar-nav {
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 0;
+  gap: 1.5rem;
+  z-index: 20;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: 0.2s;
+  width: 100%;
+  padding: 0.8rem 0;
+}
+
+.nav-item:hover,
+.nav-item.active {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-item.active {
+  border-left: 3px solid var(--primary);
+}
+
+.nav-item i {
+  font-size: 1.2rem;
+}
+
+.nav-item span {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* 2. Side Panel */
+.side-panel {
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.panel-content {
+  display: none;
+}
+
+.panel-content.active {
+  display: block;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.side-panel h2 {
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+
+.upload-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--primary);
+  color: white;
+  padding: 0.8rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.2s;
+}
+
+.upload-btn:hover {
+  background: var(--primary-hover);
+}
+
+/* Tool Groups */
+.tool-group {
+  margin-bottom: 1.5rem;
+}
+
+.tool-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.color-picker-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.5rem;
+  border-radius: 6px;
+}
+
+input[type="color"] {
+  border: none;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  background: none;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.btn-tool {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem;
+  margin-bottom: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-tool.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.layer-item {
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.layer-item.active {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* 3. Workspace */
+.workspace {
+  background: var(--bg-workspace);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  /* Checkerboard pattern for transparency */
+  background-image: linear-gradient(45deg, #3d4c63 25%, transparent 25%), linear-gradient(-45deg, #3d4c63 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #3d4c63 75%), linear-gradient(-45deg, transparent 75%, #3d4c63 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+
+  /* Layout for dual canvases */
+  flex-direction: column;
+  /* Vertical stack */
+  gap: 1rem;
+  /* Tighter gap */
+  overflow-y: auto;
+  align-items: flex-start;
+  /* Align LEFT */
+  padding: 1rem;
+  /* Reduced padding */
+}
+
+/* Independent Canvas Windows */
+.canvas-window {
+  background: #1e1e24;
+  /* Darker card bg */
+  border: 1px solid #2d2d3a;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  /* Resizeability */
+  resize: both;
+  overflow: auto;
+  /* Required for resize */
+  min-width: 300px;
+  min-height: 300px;
+}
+
+/* Remove old opacity rules if they exist or just ensure these override */
+.canvas-container {
+  box-shadow: none !important;
+  /* Managed by window now */
+  opacity: 1 !important;
+  /* Always active */
+}
+
+.canvas-boundary {
+  /* Each canvas container is handled by Fabric, but we can verify wrapper here */
+  /* pointer-events handled by Fabric */
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  margin: auto;
+}
+
+.zoom-controls {
+  position: absolute;
+  bottom: 2rem;
+  left: 2rem;
+  background: var(--bg-panel);
+  padding: 0.5rem;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.zoom-controls button {
+  background: none;
+  border: none;
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.zoom-controls button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#zoom-level {
+  font-size: 0.8rem;
+  font-weight: 600;
+  width: 40px;
+  text-align: center;
+}
+
+/* 4. Preview Panel (3D) */
+.preview-panel {
+  background: #000;
+  position: relative;
+  border-left: 1px solid var(--border);
+}
+
+#scene-container {
+  width: 100%;
+  height: 100%;
+}
+
+.model-switcher {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.4rem;
+  border-radius: 50px;
+  backdrop-filter: blur(4px);
+}
+
+.switch-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.switch-btn.active {
+  background: white;
+  color: black;
+}
