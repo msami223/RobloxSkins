@@ -86,7 +86,7 @@ body {
 }
 
 .panel-content {
-  display: none;
+  display: block;
 }
 
 .panel-content.active {

@@ -9,10 +9,12 @@ export default function PropertiesPanel() {
     activeTab, 
     brushColor, updateBrush, brushSize, isEraser,
     activeLayer, setActiveLayer, layers, syncLayers,
-    fabricRefShirt, fabricRefPants
+    fabricRefShirt, fabricRefPants,
+    // UV Placement
+    setUvPlacementMode, setUvImageData
   } = useEditor()
 
-  // Upload Handler
+  // Upload Handler (existing - adds to center)
   const handleUpload = (e, canvasRef) => {
     const file = e.target.files[0]
     if (!file || !canvasRef.current) return
@@ -27,6 +29,20 @@ export default function PropertiesPanel() {
         canvasRef.current.renderAll()
         syncLayers() // Trigger sync immediately
       })
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  // NEW: UV Placement Upload Handler
+  const handleUVUpload = (e, target) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (f) => {
+      setUvImageData(f.target.result)
+      setUvPlacementMode(target) // 'shirt' or 'pants'
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -176,7 +192,10 @@ export default function PropertiesPanel() {
         return (
           <div className="panel-content">
             <h2 style={headerStyle}>Uploads</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            
+            {/* Quick Upload (Centered) */}
+            <h3 style={subHeaderStyle}>Quick Upload</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
               <label className="upload-btn" style={btnStyle}>
                 <i className="fa-solid fa-shirt"></i> Upload to Shirt
                 <input type="file" accept="image/*" hidden onChange={(e) => handleUpload(e, fabricRefShirt)} />
@@ -186,7 +205,27 @@ export default function PropertiesPanel() {
                 <input type="file" accept="image/*" hidden onChange={(e) => handleUpload(e, fabricRefPants)} />
               </label>
             </div>
-            <p style={{ marginTop: '20px', color: '#6b7280', fontSize: '0.9rem' }}>Upload PNGs or logos to place on the clothing.</p>
+
+            {/* UV Map Placement (Precise) */}
+            <h3 style={subHeaderStyle}>Place on UV Map</h3>
+            <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '10px' }}>
+              Position your image precisely on the UV wireframe
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label className="upload-btn" style={{...btnStyle, backgroundColor: '#f0f9ff', borderColor: '#4c83f0'}}>
+                <i className="fa-solid fa-crosshairs"></i> Place on Shirt UV
+                <input type="file" accept="image/*" hidden onChange={(e) => handleUVUpload(e, 'shirt')} />
+              </label>
+              <label className="upload-btn" style={{...btnStyle, backgroundColor: '#f0f9ff', borderColor: '#4c83f0'}}>
+                <i className="fa-solid fa-crosshairs"></i> Place on Pants UV
+                <input type="file" accept="image/*" hidden onChange={(e) => handleUVUpload(e, 'pants')} />
+              </label>
+            </div>
+
+            <p style={{ marginTop: '20px', color: '#6b7280', fontSize: '0.85rem' }}>
+              <strong>Quick Upload:</strong> Centers image on canvas.<br/>
+              <strong>UV Map:</strong> Drag & position on wireframe.
+            </p>
           </div>
         )
       case 'draw':

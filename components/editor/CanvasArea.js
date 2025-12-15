@@ -54,7 +54,8 @@ export default function CanvasArea() {
           evented: false,
           hoverCursor: 'default',
           left: 0,
-          top: 0
+          top: 0,
+          excludeFromExport: true  // Don't include in texture export to 3D model
         })
         wireframeRef.current = img
         canvas.add(img)
@@ -167,14 +168,16 @@ export default function CanvasArea() {
   // === Panning Logic (Using CSS Transform) ===============
   // =======================================================
   const handleMouseDown = (e) => {
-    // Only pan with left click on the container background, not on canvas
+    // Check if clicking on a canvas element
     const isCanvas = e.target.tagName === 'CANVAS' || 
                      e.target.classList.contains('upper-canvas') ||
                      e.target.classList.contains('lower-canvas')
     
-    // Allow canvas interactions (drawing) when in draw mode
-    if (isCanvas && activeTab === 'draw') return
+    // ALWAYS allow canvas interactions (for both drawing AND object manipulation)
+    // This lets Fabric.js handle clicks on the canvas for moving/resizing objects
+    if (isCanvas) return
     
+    // Only start panning if clicking on the container background (not on canvas)
     if (e.button !== 0) return
     
     isDragging.current = true

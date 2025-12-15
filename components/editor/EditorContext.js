@@ -31,6 +31,14 @@ export function EditorProvider({ children }) {
   // 3D Model State
   const [currentModel, setCurrentModel] = useState('boy') // 'boy', 'girl', 'blocky'
 
+  // UV Placement State (for new feature)
+  const [uvPlacementMode, setUvPlacementMode] = useState(null) // null | 'shirt' | 'pants'
+  const [uvImageData, setUvImageData] = useState(null) // Uploaded image dataURL
+
+  // Refs for clean texture canvases (without selection UI or wireframe)
+  const cleanTextureShirtRef = useRef(null)
+  const cleanTexturePantsRef = useRef(null)
+
   // Actions
   const updateBrush = (color, size, eraser) => {
     if (color !== undefined) setBrushColor(color)
@@ -69,7 +77,42 @@ export function EditorProvider({ children }) {
   }
 
   const triggerTextureUpdate = () => {
+    // Update clean texture canvases before triggering the update
+    updateCleanTextures()
     setTextureUpdateTrigger(prev => prev + 1)
+  }
+
+  // Generate clean canvas exports without selection UI or wireframe
+  const updateCleanTextures = () => {
+    const generateCleanCanvas = (fabricCanvas) => {
+      if (!fabricCanvas) return null
+      
+      // Hide wireframe/excludeFromExport objects temporarily
+      const hiddenObjects = []
+      fabricCanvas.getObjects().forEach(obj => {
+        if (obj.excludeFromExport && obj.visible) {
+          obj.visible = false
+          hiddenObjects.push(obj)
+        }
+      })
+      
+      // toCanvasElement() creates a clean export WITHOUT selection controls
+      // This does NOT modify the main canvas or interfere with user interactions
+      const cleanCanvas = fabricCanvas.toCanvasElement()
+      
+      // Restore hidden objects (wireframe)
+      hiddenObjects.forEach(obj => {
+        obj.visible = true
+      })
+      
+      // Note: We don't call renderAll() here to avoid triggering more updates
+      // The wireframe will be restored on the next natural render
+      
+      return cleanCanvas
+    }
+
+    cleanTextureShirtRef.current = generateCleanCanvas(fabricRefShirt.current)
+    cleanTexturePantsRef.current = generateCleanCanvas(fabricRefPants.current)
   }
 
   const value = {
@@ -89,7 +132,15 @@ export function EditorProvider({ children }) {
     textureUpdateTrigger,
     triggerTextureUpdate,
     currentModel,
-    setCurrentModel
+    setCurrentModel,
+    // UV Placement
+    uvPlacementMode,
+    setUvPlacementMode,
+    uvImageData,
+    setUvImageData,
+    // Clean texture refs for 3D model
+    cleanTextureShirtRef,
+    cleanTexturePantsRef
   }
 
   return (

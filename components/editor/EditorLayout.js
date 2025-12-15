@@ -5,6 +5,7 @@ import Sidebar from './Sidebar'
 import PropertiesPanel from './PropertiesPanel'
 import CanvasArea from './CanvasArea'
 import ThreePreview from './ThreePreview'
+import UVPlacementModal from './UVPlacementModal'
 
 export default function EditorLayout() {
   return (
@@ -21,6 +22,9 @@ export default function EditorLayout() {
 
       {/* 4. 3D Preview (Right Panel) */}
       <ThreePreview />
+
+      {/* UV Placement Modal (renders when active) */}
+      <UVPlacementModal />
       
     </div>
   )

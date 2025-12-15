@@ -8,7 +8,15 @@ import { useEditor } from './EditorContext'
 
 export default function ThreePreview() {
   const containerRef = useRef(null)
-  const { fabricRefShirt, fabricRefPants, textureUpdateTrigger, currentModel, setCurrentModel } = useEditor()
+  const { 
+    fabricRefShirt, 
+    fabricRefPants, 
+    textureUpdateTrigger, 
+    currentModel, 
+    setCurrentModel,
+    cleanTextureShirtRef,
+    cleanTexturePantsRef
+  } = useEditor()
   
   // Refs for Three.js objects to survive re-renders
   const sceneRef = useRef(null)
@@ -30,6 +38,7 @@ export default function ThreePreview() {
 
     // Scene Setup if not already done
     if (!rendererRef.current) {
+      
         const scene = new THREE.Scene()
         scene.background = new THREE.Color('#f8fafc') // Light background
         sceneRef.current = scene
@@ -83,6 +92,7 @@ export default function ThreePreview() {
             camera.updateProjectionMatrix()
             renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight)
         }
+
         window.addEventListener('resize', handleResize)
     }
 
@@ -162,24 +172,22 @@ export default function ThreePreview() {
 
   // Sync Textures from Fabric when triggered
   useEffect(() => {
-    // Shirt Update
-    if (fabricRefShirt.current && textureShirtRef.current) {
-        const canvas = fabricRefShirt.current.getElement()
-        textureShirtRef.current.image = canvas
+    // Shirt Update - use clean texture (no selection UI, no wireframe)
+    if (cleanTextureShirtRef.current && textureShirtRef.current) {
+        textureShirtRef.current.image = cleanTextureShirtRef.current
         textureShirtRef.current.needsUpdate = true
     }
 
-    // Pants Update
-    if (fabricRefPants.current && texturePantsRef.current) {
-        const canvas = fabricRefPants.current.getElement()
-        texturePantsRef.current.image = canvas
+    // Pants Update - use clean texture (no selection UI, no wireframe)
+    if (cleanTexturePantsRef.current && texturePantsRef.current) {
+        texturePantsRef.current.image = cleanTexturePantsRef.current
         texturePantsRef.current.needsUpdate = true
     }
     
     // Ensure materials are linked
     updateModelMaterials()
 
-  }, [textureUpdateTrigger, fabricRefShirt.current, fabricRefPants.current, currentModel])
+  }, [textureUpdateTrigger, cleanTextureShirtRef.current, cleanTexturePantsRef.current, currentModel])
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}>
