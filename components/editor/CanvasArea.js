@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { Canvas, PencilBrush, Image as FabImage } from 'fabric'
+import { Canvas, PencilBrush, Image as FabImage, Line, Group } from 'fabric'
 import { useEditor } from './EditorContext'
 
 // Constants for canvas dimensions
@@ -19,10 +19,12 @@ export default function CanvasArea() {
   const lastPos = useRef({ x: 0, y: 0 })
   const wireframeShirtRef = useRef(null)
   const wireframePantsRef = useRef(null)
+  const gridShirtRef = useRef(null)
+  const gridPantsRef = useRef(null)
   const isInitialized = useRef(false)
   
   // State
-  const [showWireframe, setShowWireframe] = useState(true)
+  const [showGrid, setShowGrid] = useState(false)
   // Calculate initial zoom to fit the canvas width in the container
   const initialZoom = CONTAINER_WIDTH / (CANVAS_WIDTH + 40) // +40 for padding
   const [zoom, setZoom] = useState(initialZoom)
@@ -72,7 +74,7 @@ export default function CanvasArea() {
         width: CANVAS_WIDTH, 
         height: CANVAS_HEIGHT, 
         isDrawingMode: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: null
       })
       fabricRefShirt.current = cShirt
       loadTemplateObject(cShirt, '/templates/roblox_background_frame.348e21bb.png', wireframeShirtRef)
@@ -85,7 +87,7 @@ export default function CanvasArea() {
         width: CANVAS_WIDTH, 
         height: CANVAS_HEIGHT, 
         isDrawingMode: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: null
       })
       fabricRefPants.current = cPants
       loadTemplateObject(cPants, '/templates/roblox_background_frame.348e21bc.png', wireframePantsRef)
@@ -111,18 +113,78 @@ export default function CanvasArea() {
     }
   }, [debouncedTextureUpdate])
 
-  // Wireframe Visibility Toggle - without triggering texture update to avoid loop
+  // Grid Visibility Toggle
   useEffect(() => {
-    const toggleVisibility = (ref, canvasRef) => {
-      if (ref.current && canvasRef.current) {
-        ref.current.set({ visible: showWireframe })
-        canvasRef.current.renderAll()
-        // Don't call triggerTextureUpdate here - it will be called by after:render
+    // Helper to create grid lines for a canvas
+    const createGrid = (canvas, gridRef) => {
+      if (!canvas) return
+      
+      // Remove existing grid if any
+      if (gridRef.current) {
+        canvas.remove(gridRef.current)
+        gridRef.current = null
       }
+      
+      if (!showGrid) {
+        canvas.renderAll()
+        return
+      }
+      
+      // Create grid lines
+      const gridSize = 20 // pixels between grid lines
+      const lines = []
+      const lineColor = 'rgba(100, 116, 139, 0.3)' // semi-transparent gray
+      const lineWidth = 0.5
+      
+      // Vertical lines
+      for (let x = 0; x <= CANVAS_WIDTH; x += gridSize) {
+        const line = new Line([x, 0, x, CANVAS_HEIGHT], {
+          stroke: lineColor,
+          strokeWidth: lineWidth,
+          selectable: false,
+          evented: false,
+          excludeFromExport: true
+        })
+        lines.push(line)
+      }
+      
+      // Horizontal lines
+      for (let y = 0; y <= CANVAS_HEIGHT; y += gridSize) {
+        const line = new Line([0, y, CANVAS_WIDTH, y], {
+          stroke: lineColor,
+          strokeWidth: lineWidth,
+          selectable: false,
+          evented: false,
+          excludeFromExport: true
+        })
+        lines.push(line)
+      }
+      
+      // Create a group for all grid lines
+      const gridGroup = new Group(lines, {
+        selectable: false,
+        evented: false,
+        excludeFromExport: true,
+        hoverCursor: 'default'
+      })
+      
+      gridRef.current = gridGroup
+      canvas.add(gridGroup)
+      // Send grid to back but above wireframe
+      canvas.sendObjectToBack(gridGroup)
+      // Make sure wireframe is at the very back
+      if (wireframeShirtRef.current && canvas === fabricRefShirt.current) {
+        canvas.sendObjectToBack(wireframeShirtRef.current)
+      }
+      if (wireframePantsRef.current && canvas === fabricRefPants.current) {
+        canvas.sendObjectToBack(wireframePantsRef.current)
+      }
+      canvas.renderAll()
     }
-    toggleVisibility(wireframeShirtRef, fabricRefShirt)
-    toggleVisibility(wireframePantsRef, fabricRefPants)
-  }, [showWireframe, fabricRefShirt, fabricRefPants])
+    
+    createGrid(fabricRefShirt.current, gridShirtRef)
+    createGrid(fabricRefPants.current, gridPantsRef)
+  }, [showGrid, fabricRefShirt, fabricRefPants])
 
   // Toggle Drawing Mode
   useEffect(() => {
@@ -167,24 +229,50 @@ export default function CanvasArea() {
   // =======================================================
   // === Panning Logic (Using CSS Transform) ===============
   // =======================================================
+  
+  // Helper to force cursor globally
+  const setGlobalCursor = (cursor) => {
+    if (cursor) {
+      document.body.style.cursor = cursor
+      // Also inject a style to override canvas cursors
+      let style = document.getElementById('pan-cursor-style')
+      if (!style) {
+        style = document.createElement('style')
+        style.id = 'pan-cursor-style'
+        document.head.appendChild(style)
+      }
+      style.textContent = `* { cursor: ${cursor} !important; }`
+    } else {
+      document.body.style.cursor = ''
+      const style = document.getElementById('pan-cursor-style')
+      if (style) style.remove()
+    }
+  }
+  
   const handleMouseDown = (e) => {
     // Check if clicking on a canvas element
     const isCanvas = e.target.tagName === 'CANVAS' || 
                      e.target.classList.contains('upper-canvas') ||
                      e.target.classList.contains('lower-canvas')
     
-    // ALWAYS allow canvas interactions (for both drawing AND object manipulation)
-    // This lets Fabric.js handle clicks on the canvas for moving/resizing objects
+    // Middle mouse button (button === 1) - ALWAYS allow panning, even on canvas
+    if (e.button === 1) {
+      e.preventDefault() // Prevent default middle-click behavior (auto-scroll)
+      isDragging.current = true
+      lastPos.current = { x: e.clientX, y: e.clientY }
+      setGlobalCursor('grab')
+      return
+    }
+    
+    // Left click on canvas - let Fabric.js handle it (drawing/selecting)
     if (isCanvas) return
     
-    // Only start panning if clicking on the container background (not on canvas)
+    // Left click on background - pan the view
     if (e.button !== 0) return
     
     isDragging.current = true
     lastPos.current = { x: e.clientX, y: e.clientY }
-    if (containerRef.current) {
-      containerRef.current.style.cursor = 'grabbing'
-    }
+    setGlobalCursor('grab')
   }
 
   const handleMouseMove = (e) => {
@@ -202,9 +290,9 @@ export default function CanvasArea() {
   }
 
   const handleMouseUp = () => {
-    isDragging.current = false
-    if (containerRef.current) {
-      containerRef.current.style.cursor = 'grab'
+    if (isDragging.current) {
+      isDragging.current = false
+      setGlobalCursor(null)
     }
   }
 
@@ -287,33 +375,68 @@ export default function CanvasArea() {
   // =======================================================
   return (
     <div 
-      className="canvas-widget"
-      style={{ 
-        width: 'auto',
-        height: 'auto',
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-        overflow: 'hidden',
-        pointerEvents: 'auto',
-        border: '1px solid #e2e8f0',
-        padding: '16px',
+      className="canvas-panel"
+      style={{
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'var(--bg-panel)',
+        borderLeft: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px'
+        overflow: 'hidden'
       }}
     >
+      {/* Panel Header */}
+      <div style={{
+        padding: '16px 20px',
+        borderBottom: '1px solid var(--border)',
+        backgroundColor: 'white'
+      }}>
+        <h2 style={{ 
+          margin: 0, 
+          fontSize: '14px', 
+          fontWeight: 600, 
+          color: 'var(--text-main)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <i className="fa-solid fa-pencil" style={{ color: 'var(--primary)' }}></i>
+          2D Canvas Editor
+        </h2>
+      </div>
+
+      {/* Canvas Content */}
+      <div style={{
+        flex: 1,
+        overflow: 'auto',
+        backgroundColor: 'var(--bg-workspace)',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div 
+          className="canvas-widget"
+          style={{ 
+            width: '100%',
+            flex: 1,
+            backgroundColor: 'white',
+            overflow: 'hidden',
+            pointerEvents: 'auto',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
       {/* Header / Controls */}
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', width: '100%'}}>
+      <div style={{display:'flex',paddingLeft: '16px', paddingRight: '16px', paddingTop: '16px', justifyContent:'space-between', alignItems:'center', width: '100%'}}>
         <div 
           style={{fontSize:'12px', fontWeight:600, color:'#64748b', display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'}}
-          onClick={() => setShowWireframe(s => !s)}
+          onClick={() => setShowGrid(s => !s)}
         >
           <span 
             style={{
               width:'32px', 
               height:'18px', 
-              background: showWireframe ? '#4c83f0' : '#cbd5e1', 
+              background: showGrid ? '#4c83f0' : '#cbd5e1', 
               borderRadius:'10px', 
               position:'relative', 
               transition: 'background-color 0.2s'
@@ -327,12 +450,12 @@ export default function CanvasArea() {
                 width:'14px', 
                 background:'white', 
                 borderRadius:'50%', 
-                left: showWireframe ? '16px' : '2px',
+                left: showGrid ? '16px' : '2px',
                 transition: 'left 0.2s'
               }}
             />
           </span>
-          Wireframe
+          Grid
         </div>
         
         <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
@@ -363,14 +486,12 @@ export default function CanvasArea() {
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         style={{
-          width: `${CONTAINER_WIDTH}px`,
-          height: `${CONTAINER_HEIGHT}px`,
+          width: '100%',
+          flex: 1,
           overflow: 'hidden',
           position: 'relative',
           background: 'radial-gradient(#e2e8f0 1px, transparent 1px)',
           backgroundSize: '16px 16px',
-          borderRadius: '8px',
-          border: '1px solid #e2e8f0',
           cursor: isDragging.current ? 'grabbing' : 'grab'
         }}
       >
@@ -392,7 +513,7 @@ export default function CanvasArea() {
             position: 'relative', 
             width: CANVAS_WIDTH, 
             height: CANVAS_HEIGHT, 
-            backgroundColor: 'white', 
+            backgroundColor: 'transparent', 
             border: '2px dashed #94a3b8', 
             borderRadius: '4px',
             boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
@@ -409,7 +530,7 @@ export default function CanvasArea() {
             position: 'relative', 
             width: CANVAS_WIDTH, 
             height: CANVAS_HEIGHT, 
-            backgroundColor: 'white', 
+            backgroundColor: 'transparent', 
             border: '2px dashed #94a3b8',
             borderRadius: '4px', 
             boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
@@ -424,11 +545,8 @@ export default function CanvasArea() {
         </div>
       </div>
 
-      {/* Help Text */}
-      <div style={{fontSize:'10px', color:'#94a3b8', textAlign:'center'}}>
-        Scroll to zoom • Drag to pan • Switch to Draw mode to paint
+        </div>
       </div>
-
     </div>
   )
 }

@@ -274,7 +274,8 @@ export default function PropertiesPanel() {
 
   return (
     <aside style={{ 
-        width: '300px', 
+        width: '100%',
+        height: '100%',
         backgroundColor: 'var(--bg-panel)', 
         borderRight: '1px solid var(--border)',
         padding: '20px',

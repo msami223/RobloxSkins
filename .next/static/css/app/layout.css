@@ -28,8 +28,7 @@ body {
 }
 
 #app {
-  display: grid;
-  grid-template-columns: 72px 300px 1fr 400px;
+  display: flex;
   height: 100vh;
 }
 
@@ -402,5 +401,61 @@ input[type="range"] {
 .no-scrollbar {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
+}
+
+/* ============================================ */
+/* Responsive Design                             */
+/* ============================================ */
+
+/* Medium screens - reduce panel sizes */
+@media (max-width: 1200px) {
+  .canvas-panel,
+  .canvas-widget {
+    min-width: 300px !important;
+  }
+}
+
+/* Small screens */
+@media (max-width: 900px) {
+  .sidebar-nav,
+  nav {
+    width: 60px !important;
+    min-width: 60px !important;
+  }
+  
+  .nav-item span {
+    font-size: 0.6rem;
+  }
+}
+
+/* Extra small screens / tablets */
+@media (max-width: 768px) {
+  #app {
+    flex-direction: column;
+  }
+  
+  .sidebar-nav,
+  nav {
+    width: 100% !important;
+    height: 60px !important;
+    flex-direction: row !important;
+    padding: 0.5rem 1rem !important;
+  }
+  
+  .nav-item {
+    flex-direction: row;
+    gap: 0.5rem;
+    padding: 0.5rem !important;
+  }
+  
+  /* Hide side panels on very small screens by default */
+  .canvas-panel {
+    position: fixed;
+    right: 0;
+    top: 60px;
+    height: calc(100vh - 60px);
+    z-index: 100;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+  }
 }
 

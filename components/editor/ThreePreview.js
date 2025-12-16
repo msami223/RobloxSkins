@@ -85,15 +85,27 @@ export default function ThreePreview() {
         }
         animate()
 
-        // Resize Handle
+        // Resize Handle - using ResizeObserver for container size changes
         const handleResize = () => {
             if (!containerRef.current || !camera || !renderer) return
-            camera.aspect = containerRef.current.clientWidth / containerRef.current.clientHeight
+            const width = containerRef.current.clientWidth
+            const height = containerRef.current.clientHeight
+            if (width === 0 || height === 0) return
+            camera.aspect = width / height
             camera.updateProjectionMatrix()
-            renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight)
+            renderer.setSize(width, height)
         }
 
+        // Use ResizeObserver to detect container size changes (not just window resize)
+        const resizeObserver = new ResizeObserver(() => {
+          handleResize()
+        })
+        resizeObserver.observe(containerRef.current)
+
         window.addEventListener('resize', handleResize)
+        
+        // Store cleanup ref
+        containerRef.current._resizeObserver = resizeObserver
     }
 
     // Load Model logic (Runs whenever currentModel changes)
@@ -190,7 +202,16 @@ export default function ThreePreview() {
   }, [textureUpdateTrigger, cleanTextureShirtRef.current, cleanTexturePantsRef.current, currentModel])
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ 
+      flex: 1, 
+      height: '100%', 
+      position: 'relative', 
+      display: 'flex', 
+      flexDirection: 'column',
+      backgroundColor: 'var(--bg-workspace)',
+      backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)',
+      backgroundSize: '20px 20px'
+    }}>
       <div 
         ref={containerRef} 
         style={{ flex: 1, width: '100%' }}
