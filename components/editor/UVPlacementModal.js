@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Canvas, Image as FabImage } from 'fabric'
 import { useEditor } from './EditorContext'
 
@@ -19,94 +19,143 @@ export default function UVPlacementModal() {
     syncLayers
   } = useEditor()
 
-  const canvasRef = useRef(null)
+  const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
   const uploadedImageRef = useRef(null)
   const [isLoading, setIsLoading] = useState(true)
+  const isInitializedRef = useRef(false)
 
   // Initialize Fabric canvas when modal opens
   useEffect(() => {
     if (!uvPlacementMode || !uvImageData) return
+    if (!canvasElRef.current) return
+    if (isInitializedRef.current) return
+    
+    isInitializedRef.current = true
+    setIsLoading(true)
 
-    // Create Fabric canvas for placement
-    if (!fabricRef.current) {
-      fabricRef.current = new Canvas('uv-placement-canvas', {
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
-        backgroundColor: '#ffffff',
-        selection: true
-      })
-    }
-
-    const canvas = fabricRef.current
-
-    // Load the wireframe template
-    const templateUrl = uvPlacementMode === 'shirt' 
-      ? '/templates/roblox_background_frame.348e21bb.png'
-      : '/templates/roblox_background_frame.348e21bc.png'
-
-    // Load wireframe as background reference
-    FabImage.fromURL(templateUrl).then(wireframe => {
-      wireframe.scaleToWidth(CANVAS_WIDTH)
-      wireframe.set({
-        left: 0,
-        top: 0,
-        selectable: false,
-        evented: false,
-        opacity: 0.7
-      })
-      canvas.add(wireframe)
-      canvas.sendObjectToBack(wireframe)
-
-      // Load the user's uploaded image
-      FabImage.fromURL(uvImageData).then(img => {
-        // Scale down if too large
-        const maxSize = 300
-        if (img.width > maxSize || img.height > maxSize) {
-          const scale = maxSize / Math.max(img.width, img.height)
-          img.scale(scale)
-        }
-
-        img.set({
-          left: CANVAS_WIDTH / 2,
-          top: CANVAS_HEIGHT / 2,
-          originX: 'center',
-          originY: 'center',
-          cornerColor: '#4c83f0',
-          cornerStyle: 'circle',
-          borderColor: '#4c83f0',
-          transparentCorners: false,
-          cornerSize: 12,
-          padding: 10
-        })
-
-        uploadedImageRef.current = img
-        canvas.add(img)
-        canvas.setActiveObject(img)
-        canvas.renderAll()
-        setIsLoading(false)
-      }).catch(err => {
-        console.error('Failed to load uploaded image:', err)
-        setIsLoading(false)
-      })
-    }).catch(err => {
-      console.error('Failed to load wireframe template:', err)
-      setIsLoading(false)
-    })
-
-    return () => {
-      // Cleanup on close
+    // Small delay to ensure DOM is ready
+    const initTimeout = setTimeout(() => {
+      // Dispose any existing canvas
       if (fabricRef.current) {
         fabricRef.current.dispose()
         fabricRef.current = null
       }
+
+      // Create Fabric canvas for placement
+      const canvas = new Canvas(canvasElRef.current, {
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+        backgroundColor: '#ffffff',
+        selection: true,
+        uniformScaling: false,
+        preserveObjectStacking: true,
+        renderOnAddRemove: true,
+        skipTargetFind: false,
+        interactive: true
+      })
+      
+      fabricRef.current = canvas
+
+      // Load the wireframe template
+      const templateUrl = uvPlacementMode === 'shirt' 
+        ? '/templates/roblox_background_frame.348e21bb.png'
+        : '/templates/roblox_background_frame.348e21bc.png'
+
+      // Load wireframe as background reference
+      FabImage.fromURL(templateUrl).then(wireframe => {
+        if (!fabricRef.current) return
+        
+        wireframe.scaleToWidth(CANVAS_WIDTH)
+        wireframe.set({
+          left: 0,
+          top: 0,
+          selectable: false,
+          evented: false,
+          opacity: 0.7,
+          excludeFromExport: true
+        })
+        canvas.add(wireframe)
+        canvas.sendObjectToBack(wireframe)
+
+        // Load the user's uploaded image
+        FabImage.fromURL(uvImageData).then(img => {
+          if (!fabricRef.current) return
+          
+          // Scale down if too large
+          const maxSize = 300
+          if (img.width > maxSize || img.height > maxSize) {
+            const scale = maxSize / Math.max(img.width, img.height)
+            img.scale(scale)
+          }
+
+          img.set({
+            left: CANVAS_WIDTH / 2,
+            top: CANVAS_HEIGHT / 2,
+            originX: 'center',
+            originY: 'center',
+            // Control styling
+            cornerColor: '#4c83f0',
+            cornerStyle: 'circle',
+            borderColor: '#4c83f0',
+            transparentCorners: false,
+            cornerSize: 14,
+            padding: 5,
+            borderScaleFactor: 2,
+            // Enable all controls
+            hasControls: true,
+            hasBorders: true,
+            hasRotatingPoint: true,
+            // Ensure transforms are NOT locked
+            lockScalingX: false,
+            lockScalingY: false,
+            lockRotation: false,
+            lockMovementX: false,
+            lockMovementY: false,
+            lockUniScaling: false,
+            // Additional settings
+            centeredScaling: false,
+            centeredRotation: true,
+            selectable: true,
+            evented: true
+          })
+
+          uploadedImageRef.current = img
+          canvas.add(img)
+          canvas.setActiveObject(img)
+          img.setCoords()
+          canvas.requestRenderAll()
+          setIsLoading(false)
+        }).catch(err => {
+          console.error('Failed to load uploaded image:', err)
+          setIsLoading(false)
+        })
+      }).catch(err => {
+        console.error('Failed to load wireframe template:', err)
+        setIsLoading(false)
+      })
+    }, 100)
+
+    return () => {
+      clearTimeout(initTimeout)
     }
   }, [uvPlacementMode, uvImageData])
 
-  // Handle Apply - transfer the image to the main canvas
-  const handleApply = () => {
-    if (!uploadedImageRef.current) return
+  // Cleanup on close
+  useEffect(() => {
+    return () => {
+      if (fabricRef.current) {
+        fabricRef.current.dispose()
+        fabricRef.current = null
+      }
+      isInitializedRef.current = false
+    }
+  }, [])
 
+  // Handle Apply - transfer the image to the main canvas
+  const handleApply = useCallback(() => {
+    if (!uploadedImageRef.current) return
+    
     const targetCanvas = uvPlacementMode === 'shirt' 
       ? fabricRefShirt.current 
       : fabricRefPants.current
@@ -140,17 +189,19 @@ export default function UVPlacementModal() {
       // Close the modal
       handleClose()
     })
-  }
+  }, [uvPlacementMode, uvImageData, fabricRefShirt, fabricRefPants, syncLayers])
 
   // Handle Cancel
-  const handleClose = () => {
-    setUvPlacementMode(null)
-    setUvImageData(null)
+  const handleClose = useCallback(() => {
     if (fabricRef.current) {
       fabricRef.current.dispose()
       fabricRef.current = null
     }
-  }
+    isInitializedRef.current = false
+    uploadedImageRef.current = null
+    setUvPlacementMode(null)
+    setUvImageData(null)
+  }, [setUvPlacementMode, setUvImageData])
 
   // Don't render if not active
   if (!uvPlacementMode || !uvImageData) return null
@@ -176,15 +227,14 @@ export default function UVPlacementModal() {
         {/* Canvas Container */}
         <div style={canvasContainerStyle}>
           {isLoading && (
-            <div style={loadingStyle}>
+            <div style={loadingOverlayStyle}>
               <i className="fa-solid fa-spinner fa-spin"></i> Loading...
             </div>
           )}
           <canvas 
-            id="uv-placement-canvas" 
+            ref={canvasElRef}
             width={CANVAS_WIDTH} 
             height={CANVAS_HEIGHT}
-            style={{ display: isLoading ? 'none' : 'block' }}
           />
         </div>
 
@@ -259,17 +309,28 @@ const instructionStyle = {
 const canvasContainerStyle = {
   border: '2px solid #e2e8f0',
   borderRadius: '8px',
-  overflow: 'hidden',
+  overflow: 'visible', // Changed from 'hidden' to allow control handles to show
   backgroundColor: '#f8fafc',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  minHeight: '400px'
+  minHeight: '400px',
+  position: 'relative'
 }
 
-const loadingStyle = {
+const loadingOverlayStyle = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: 'rgba(248, 250, 252, 0.9)',
   color: '#64748b',
-  fontSize: '14px'
+  fontSize: '14px',
+  zIndex: 10
 }
 
 const helpTextStyle = {
