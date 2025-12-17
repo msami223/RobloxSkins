@@ -1,4 +1,4 @@
-// File: C:\Users\Lenovo\RobloxSkins\app\layout.js
+// File: /Users/sami/Web projects/Roblox 3D Canvas/app/layout.js
 import * as entry from '../../../app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
