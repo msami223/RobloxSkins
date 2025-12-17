@@ -199,7 +199,6 @@ export function EditorProvider({ children }) {
 
     // TORSO REGION COORDINATES (approximate for 585x559 template)
     // The torso is in the center of both templates
-    // Adjust these values based on your actual template layout
     const torsoRegion = {
       x: 128,      // Left edge of torso area
       y: 99,       // Top edge of torso area  
@@ -207,12 +206,18 @@ export function EditorProvider({ children }) {
       height: 192  // Height of main torso
     }
 
-    // ALWAYS MASK TORSO FROM PANTS CANVAS
-    // The shirt torso and pants torso overlap on the 3D model, causing z-fighting
-    // By always clearing the pants torso, only the shirt texture shows in that area
-    // This eliminates the flickering/overlap issue when rotating the model
-    const ctx = pantsCanvas.getContext('2d')
-    ctx.clearRect(torsoRegion.x, torsoRegion.y, torsoRegion.width, torsoRegion.height)
+    // TORSO PRIORITY LOGIC:
+    // Use torsoPriority state (set by layer order / Swap button) to decide which torso to show
+    // The mesh with cleared torso will be transparent there, letting the other mesh show through
+    if (torsoPriority === 'shirt') {
+      // Shirt has priority - clear PANTS torso so shirt shows on top
+      const ctx = pantsCanvas.getContext('2d')
+      ctx.clearRect(torsoRegion.x, torsoRegion.y, torsoRegion.width, torsoRegion.height)
+    } else if (torsoPriority === 'pants') {
+      // Pants has priority - clear SHIRT torso so pants shows through
+      const ctx = shirtCanvas.getContext('2d')
+      ctx.clearRect(torsoRegion.x, torsoRegion.y, torsoRegion.width, torsoRegion.height)
+    }
 
     cleanTextureShirtRef.current = shirtCanvas
     cleanTexturePantsRef.current = pantsCanvas
