@@ -175,16 +175,32 @@ export default function ThreePreview() {
                 return  // Exit early, don't apply texture logic
             }
 
-            // BOT mesh (pants/legs) - renders BEHIND top mesh
+            // BOT mesh (pants/legs)
             if (name.includes('bot')) {
                 mat.map = texturePantsRef.current
-                mat.depthWrite = false   // Don't write to depth buffer - allows top to show through
-                child.renderOrder = 0    // Render first
+                // Render order based on torsoPriority
+                if (torsoPriority === 'pants') {
+                    // Pants has priority - render ON TOP
+                    mat.depthWrite = true
+                    child.renderOrder = 1
+                } else {
+                    // Shirt has priority - pants renders behind
+                    mat.depthWrite = false
+                    child.renderOrder = 0
+                }
             } else if (name.includes('top')) {
-                // TOP mesh (shirt/torso/arms) - renders ON TOP
+                // TOP mesh (shirt/torso/arms)
                 mat.map = textureShirtRef.current
-                mat.depthWrite = true    // Write to depth buffer normally
-                child.renderOrder = 1    // Render second (on top)
+                // Render order based on torsoPriority
+                if (torsoPriority === 'shirt') {
+                    // Shirt has priority - render ON TOP
+                    mat.depthWrite = true
+                    child.renderOrder = 1
+                } else {
+                    // Pants has priority - shirt renders behind
+                    mat.depthWrite = false
+                    child.renderOrder = 0
+                }
             } else {
                 // Any other mesh - use shirt texture as fallback
                 mat.map = textureShirtRef.current

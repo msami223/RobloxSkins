@@ -77,7 +77,7 @@ export default function CanvasArea() {
         backgroundColor: null
       })
       fabricRefShirt.current = cShirt
-      loadTemplateObject(cShirt, '/templates/roblox_background_frame.348e21bc.png', wireframeShirtRef)
+      loadTemplateObject(cShirt, '/templates/roblox_background_frame.348e21bb.png', wireframeShirtRef)
       // NOTE: Removed after:render listener - it causes infinite loops
       // Object events (add, remove, modify) handled separately are sufficient
     }
@@ -90,7 +90,7 @@ export default function CanvasArea() {
         backgroundColor: null
       })
       fabricRefPants.current = cPants
-      loadTemplateObject(cPants, '/templates/roblox_background_frame.348e21bb.png', wireframePantsRef)
+      loadTemplateObject(cPants, '/templates/roblox_background_frame.348e21bc.png', wireframePantsRef)
       // NOTE: Removed after:render listener - it causes infinite loops
     }
 
