@@ -15,7 +15,8 @@ export default function ThreePreview() {
     currentModel, 
     setCurrentModel,
     cleanTextureShirtRef,
-    cleanTexturePantsRef
+    cleanTexturePantsRef,
+    torsoPriority // NEW: for torso texture priority
   } = useEditor()
   
   // Refs for Three.js objects to survive re-renders
@@ -152,6 +153,8 @@ export default function ThreePreview() {
   }, [currentModel]) // Re-run when model changes
 
   // Material Update Logic
+  // BOT mesh (pants) uses depthWrite=false so TOP mesh (shirt) always renders on top
+  // Combined with pants torso being masked in EditorContext, this eliminates z-fighting
   const updateModelMaterials = () => {
      if (!modelRef.current) return
      
@@ -159,29 +162,59 @@ export default function ThreePreview() {
         if (child.isMesh) {
             const name = child.name.toLowerCase()
             const mat = child.material
+            
+            // GHOST mesh (head/face) - solid skin color, no texture
+            if (name.includes('ghost')) {
+                mat.map = null
+                mat.transparent = false
+                mat.opacity = 1
+                if (mat.color) mat.color.setHex(0xe0c8b0)  // Skin tone color
+                mat.side = THREE.DoubleSide
+                mat.needsUpdate = true
+                child.visible = true
+                return  // Exit early, don't apply texture logic
+            }
 
-            if (name.includes('bot') || name.includes('leg') || name.includes('pants')) {
+            // BOT mesh (pants/legs) - renders BEHIND top mesh
+            if (name.includes('bot')) {
                 mat.map = texturePantsRef.current
-                mat.needsUpdate = true
-            } else if (name.includes('top') || name.includes('shirt') || name.includes('arm')) {
+                mat.depthWrite = false   // Don't write to depth buffer - allows top to show through
+                child.renderOrder = 0    // Render first
+            } else if (name.includes('top')) {
+                // TOP mesh (shirt/torso/arms) - renders ON TOP
                 mat.map = textureShirtRef.current
-                mat.needsUpdate = true
-            } else if (name.includes('torso') || name.includes('body')) {
-                // Torso often shares shirt texture
+                mat.depthWrite = true    // Write to depth buffer normally
+                child.renderOrder = 1    // Render second (on top)
+            } else {
+                // Any other mesh - use shirt texture as fallback
                 mat.map = textureShirtRef.current
-                mat.needsUpdate = true
+                mat.depthWrite = true
+                child.renderOrder = 1
             }
 
-            if (mat.map) {
+            // Render both sides of faces
+            mat.side = THREE.DoubleSide
+
+            // Apply material settings based on whether texture exists
+            if (mat.map && mat.map.image) {
+                // Has texture - make transparent for alpha cutout
                 mat.transparent = true
-                mat.alphaTest = 0.1 // Prevent Z-fighting with transparency
+                mat.alphaTest = 0.1 
+                mat.opacity = 1
                 if (mat.color) mat.color.setHex(0xffffff)
-                mat.needsUpdate = true
+            } else {
+                // No texture yet - show as gray, opaque
+                mat.map = null
+                mat.transparent = false
+                mat.opacity = 1
+                if (mat.color) mat.color.setHex(0xcccccc)
             }
+            
+            mat.needsUpdate = true
+            child.visible = true
         }
      })
   }
-
   // Sync Textures from Fabric when triggered
   useEffect(() => {
     // Shirt Update - use clean texture (no selection UI, no wireframe)
@@ -199,7 +232,7 @@ export default function ThreePreview() {
     // Ensure materials are linked
     updateModelMaterials()
 
-  }, [textureUpdateTrigger, cleanTextureShirtRef.current, cleanTexturePantsRef.current, currentModel])
+  }, [textureUpdateTrigger, currentModel, torsoPriority])  // Removed ref.current - they cause infinite loops
 
   return (
     <div style={{ 

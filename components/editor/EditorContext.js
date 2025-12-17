@@ -17,13 +17,19 @@ export function EditorProvider({ children }) {
   const [brushSize, setBrushSize] = useState(5)
   const [isEraser, setIsEraser] = useState(false)
 
-  // Canvas State
-  const [activeLayer, setActiveLayer] = useState(null)
-  const [layers, setLayers] = useState({ shirt: [], pants: [] })
+  // Canvas State - Single ordered array of all layers
+  const [activeLayerId, setActiveLayerId] = useState(null) // Use ID for active layer
+  // Layer structure: {id: string, name: string, visible: bool, canvasTarget: 'shirt'|'pants', type: string}
+  const [layers, setLayers] = useState([])
+  
+  // State to explicitly track which canvas's content should be used for torso
+  const [torsoPriority, setTorsoPriority] = useState('shirt') // 'shirt' or 'pants'
   
   // Refs to access Fabric instances directly when needed
   const fabricRefShirt = useRef(null)
   const fabricRefPants = useRef(null)
+
+  console.log("fabricRefShirt",fabricRefShirt)
   
   // 3D Texture Update Trigger
   const [textureUpdateTrigger, setTextureUpdateTrigger] = useState(0)
@@ -38,6 +44,9 @@ export function EditorProvider({ children }) {
   // Refs for clean texture canvases (without selection UI or wireframe)
   const cleanTextureShirtRef = useRef(null)
   const cleanTexturePantsRef = useRef(null)
+  
+  // Flag to prevent re-entrant syncLayers calls (prevents infinite loop)
+  const isSyncingRef = useRef(false)
 
   // Actions
   const updateBrush = (color, size, eraser) => {
@@ -55,24 +64,80 @@ export function EditorProvider({ children }) {
   }
 
   const syncLayers = () => {
-    const getLayers = (canvas) => {
+    // Prevent re-entrant calls (prevents infinite loop)
+    if (isSyncingRef.current) return
+    isSyncingRef.current = true
+    
+    const getLayerObjects = (canvas, target) => {
         if (!canvas) return []
-        // exclude background image (usually index 0, check 'excludeFromExport')
-        return canvas.getObjects().filter(o => !o.excludeFromExport).reverse().map((o, i) => ({
-            id: o.uid || Math.random().toString(36).substr(2, 9), // Ensure ID
-            type: o.type === 'image' ? 'Sticker' : 'Drawing',
-            name: o.customName || `${o.type === 'image' ? 'Sticker' : 'Drawing'}`,
-            visible: o.visible,
-            object: o // Keep reference (be careful with React state, might need just ID)
-        }))
+        // Collect objects, assigning which canvas they belong to
+        return canvas.getObjects().filter(o => !o.excludeFromExport)
+            .map(o => ({
+                id: o.uid || Math.random().toString(36).substr(2, 9),
+                type: o.type === 'image' ? 'Sticker' : 'Drawing',
+                name: o.customName || `${o.type === 'image' ? 'Sticker' : 'Drawing'}`,
+                visible: o.visible,
+                canvasTarget: target, // 'shirt' or 'pants'
+                object: o // Keep reference
+            }))
     }
 
-    setLayers({
-        shirt: getLayers(fabricRefShirt.current),
-        pants: getLayers(fabricRefPants.current)
-    })
+    const shirtObjects = getLayerObjects(fabricRefShirt.current, 'shirt')
+    const pantsObjects = getLayerObjects(fabricRefPants.current, 'pants')
+
+    // Merge: Shirt layers above Pants layers by default (can be reordered later)
+    const mergedLayers = [...pantsObjects, ...shirtObjects]
     
-    // Also trigger texture update whenever layers change
+    setLayers(mergedLayers)
+    
+    // Set torso priority based on top-most layer's canvasTarget
+    // Only update if actually changed to prevent re-renders
+    const topMostLayer = mergedLayers.slice(-1)[0]
+    if (topMostLayer && topMostLayer.canvasTarget !== torsoPriority) {
+        setTorsoPriority(topMostLayer.canvasTarget)
+    }
+    
+    triggerTextureUpdate()
+    
+    // Reset flag after a small delay to allow state updates to complete
+    setTimeout(() => {
+      isSyncingRef.current = false
+    }, 100)
+  }
+  
+  // Function to move a layer up or down in the stack
+  const updateLayerOrder = (layerId, direction) => {
+    const index = layers.findIndex(l => l.id === layerId)
+    if (index === -1) return
+
+    const newIndex = direction === 'up' ? index + 1 : index - 1
+    if (newIndex < 0 || newIndex >= layers.length) return
+
+    // 1. Update the layers state array for UI display
+    const newLayers = [...layers]
+    const [layer] = newLayers.splice(index, 1)
+    newLayers.splice(newIndex, 0, layer)
+    setLayers(newLayers)
+    
+    // 2. Update the Z-index on the corresponding Fabric canvas
+    const canvasRef = layer.canvasTarget === 'shirt' ? fabricRefShirt : fabricRefPants
+    const fabricObject = canvasRef.current?.getObjects().find(o => o.uid === layerId)
+    
+    if (fabricObject) {
+        if (direction === 'up') {
+            fabricObject.bringForward()
+        } else {
+            fabricObject.sendBackwards()
+        }
+        canvasRef.current.renderAll()
+    }
+
+    // 3. Recalculate and set Torso Priority based on the new top layer
+    const topMostLayer = newLayers.slice(-1)[0]
+    if (topMostLayer) {
+        setTorsoPriority(topMostLayer.canvasTarget)
+    }
+
     triggerTextureUpdate()
   }
 
@@ -83,6 +148,7 @@ export function EditorProvider({ children }) {
   }
 
   // Generate clean canvas exports without selection UI or wireframe
+  // Also masks torso region from non-priority canvas to prevent z-fighting
   const updateCleanTextures = () => {
     const generateCleanCanvas = (fabricCanvas) => {
       if (!fabricCanvas) return null
@@ -97,22 +163,59 @@ export function EditorProvider({ children }) {
       })
       
       // toCanvasElement() creates a clean export WITHOUT selection controls
-      // This does NOT modify the main canvas or interfere with user interactions
-      const cleanCanvas = fabricCanvas.toCanvasElement()
+      const exportedCanvas = fabricCanvas.toCanvasElement()
       
       // Restore hidden objects (wireframe)
       hiddenObjects.forEach(obj => {
         obj.visible = true
       })
       
-      // Note: We don't call renderAll() here to avoid triggering more updates
-      // The wireframe will be restored on the next natural render
+      // Create a new canvas with WHITE BACKGROUND
+      // This ensures model parts without images are still visible (white, not transparent)
+      const finalCanvas = document.createElement('canvas')
+      finalCanvas.width = exportedCanvas.width
+      finalCanvas.height = exportedCanvas.height
+      const ctx = finalCanvas.getContext('2d')
       
-      return cleanCanvas
+      // Fill with white background first
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height)
+      
+      // Draw the exported content on top
+      ctx.drawImage(exportedCanvas, 0, 0)
+      
+      return finalCanvas
     }
 
-    cleanTextureShirtRef.current = generateCleanCanvas(fabricRefShirt.current)
-    cleanTexturePantsRef.current = generateCleanCanvas(fabricRefPants.current)
+    // Generate base clean canvases
+    const shirtCanvas = generateCleanCanvas(fabricRefShirt.current)
+    const pantsCanvas = generateCleanCanvas(fabricRefPants.current)
+    
+    if (!shirtCanvas || !pantsCanvas) {
+      cleanTextureShirtRef.current = shirtCanvas
+      cleanTexturePantsRef.current = pantsCanvas
+      return
+    }
+
+    // TORSO REGION COORDINATES (approximate for 585x559 template)
+    // The torso is in the center of both templates
+    // Adjust these values based on your actual template layout
+    const torsoRegion = {
+      x: 128,      // Left edge of torso area
+      y: 99,       // Top edge of torso area  
+      width: 320,  // Width covering R + FRONT + BACK + L
+      height: 192  // Height of main torso
+    }
+
+    // ALWAYS MASK TORSO FROM PANTS CANVAS
+    // The shirt torso and pants torso overlap on the 3D model, causing z-fighting
+    // By always clearing the pants torso, only the shirt texture shows in that area
+    // This eliminates the flickering/overlap issue when rotating the model
+    const ctx = pantsCanvas.getContext('2d')
+    ctx.clearRect(torsoRegion.x, torsoRegion.y, torsoRegion.width, torsoRegion.height)
+
+    cleanTextureShirtRef.current = shirtCanvas
+    cleanTexturePantsRef.current = pantsCanvas
   }
 
   const value = {
@@ -122,11 +225,14 @@ export function EditorProvider({ children }) {
     brushSize,
     isEraser,
     updateBrush,
-    activeLayer,
-    setActiveLayer,
+    activeLayerId,
+    setActiveLayerId,
     layers,
     setLayers,
-    syncLayers, // Expose sync function
+    syncLayers,
+    updateLayerOrder,
+    torsoPriority,
+    setTorsoPriority,
     fabricRefShirt,
     fabricRefPants,
     textureUpdateTrigger,

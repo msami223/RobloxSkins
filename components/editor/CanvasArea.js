@@ -77,9 +77,9 @@ export default function CanvasArea() {
         backgroundColor: null
       })
       fabricRefShirt.current = cShirt
-      loadTemplateObject(cShirt, '/templates/roblox_background_frame.348e21bb.png', wireframeShirtRef)
-      // Use debounced update to prevent infinite loops
-      cShirt.on('after:render', debouncedTextureUpdate)
+      loadTemplateObject(cShirt, '/templates/roblox_background_frame.348e21bc.png', wireframeShirtRef)
+      // NOTE: Removed after:render listener - it causes infinite loops
+      // Object events (add, remove, modify) handled separately are sufficient
     }
 
     if (!fabricRefPants.current) {
@@ -90,8 +90,8 @@ export default function CanvasArea() {
         backgroundColor: null
       })
       fabricRefPants.current = cPants
-      loadTemplateObject(cPants, '/templates/roblox_background_frame.348e21bc.png', wireframePantsRef)
-      cPants.on('after:render', debouncedTextureUpdate)
+      loadTemplateObject(cPants, '/templates/roblox_background_frame.348e21bb.png', wireframePantsRef)
+      // NOTE: Removed after:render listener - it causes infinite loops
     }
 
     // Configure brushes

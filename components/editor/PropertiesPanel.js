@@ -8,10 +8,12 @@ export default function PropertiesPanel() {
   const { 
     activeTab, 
     brushColor, updateBrush, brushSize, isEraser,
-    activeLayer, setActiveLayer, layers, syncLayers,
+    activeLayerId, setActiveLayerId, layers, syncLayers, updateLayerOrder,
     fabricRefShirt, fabricRefPants,
     // UV Placement
-    setUvPlacementMode, setUvImageData
+    setUvPlacementMode, setUvImageData,
+    // Torso Priority
+    torsoPriority, setTorsoPriority, triggerTextureUpdate
   } = useEditor()
 
   // Upload Handler (existing - adds to center)
@@ -49,17 +51,17 @@ export default function PropertiesPanel() {
   }
 
   // Layer Actions
-  const toggleVisibility = (layer, canvasName) => {
-    const canvas = canvasName === 'shirt' ? fabricRefShirt.current : fabricRefPants.current
-    if (!canvas) return
+  const toggleVisibility = (layer) => {
+    const canvas = layer.canvasTarget === 'shirt' ? fabricRefShirt.current : fabricRefPants.current
+    if (!canvas || !layer.object) return
     layer.object.visible = !layer.object.visible
     canvas.renderAll()
     syncLayers()
   }
 
-  const deleteLayer = (layer, canvasName) => {
-    const canvas = canvasName === 'shirt' ? fabricRefShirt.current : fabricRefPants.current
-    if (!canvas) return
+  const deleteLayer = (layer) => {
+    const canvas = layer.canvasTarget === 'shirt' ? fabricRefShirt.current : fabricRefPants.current
+    if (!canvas || !layer.object) return
     canvas.remove(layer.object)
     canvas.renderAll()
     syncLayers()
@@ -128,31 +130,39 @@ export default function PropertiesPanel() {
     syncLayers()
   }
 
-  const renderLayerList = (list, name) => {
-    if (list.length === 0) return <div style={{ padding: '10px', color: '#64748b', fontStyle: 'italic', fontSize: '0.8rem' }}>No layers</div>
+  // Render unified layer list (single array with canvasTarget)
+  const renderUnifiedLayerList = () => {
+    if (layers.length === 0) return <div style={{ padding: '10px', color: '#64748b', fontStyle: 'italic', fontSize: '0.8rem' }}>No layers</div>
     
-    return list.map((layer, i) => (
-        <div key={i} 
-             className={`layer-item ${activeLayer === layer.object ? 'active' : ''}`} 
+    // Reverse so top-most layer (last in array) appears first in UI
+    const displayLayers = [...layers].reverse()
+    
+    return displayLayers.map((layer, i) => (
+        <div key={layer.id} 
              style={{
                  ...layerItemStyle,
-                 borderColor: activeLayer === layer.object ? 'var(--primary)' : 'var(--border)'
+                 borderColor: activeLayerId === layer.id ? 'var(--primary)' : 'var(--border)'
              }}
-             draggable
-             onDragStart={(e) => handleDragStart(e, i, name)}
-             onDragOver={handleDragOver}
-             onDrop={(e) => handleDrop(e, i, name)}
              onClick={() => {
-                 const canvas = name === 'shirt' ? fabricRefShirt.current : fabricRefPants.current
-                 if(canvas) {
+                 const canvas = layer.canvasTarget === 'shirt' ? fabricRefShirt.current : fabricRefPants.current
+                 if(canvas && layer.object) {
                      canvas.setActiveObject(layer.object)
                      canvas.renderAll()
-                     setActiveLayer(layer.object)
+                     setActiveLayerId(layer.id)
                  }
              }}
         >
-            <div style={{ marginRight: '10px', cursor: 'grab', color: '#94a3b8', fontSize: '12px' }}>
-                <i className="fa-solid fa-grip-vertical"></i>
+            {/* Canvas Target Badge */}
+            <div style={{ 
+                marginRight: '8px', 
+                padding: '2px 6px', 
+                fontSize: '0.65rem', 
+                fontWeight: 600, 
+                borderRadius: '3px',
+                backgroundColor: layer.canvasTarget === 'shirt' ? '#dbeafe' : '#fce7f3',
+                color: layer.canvasTarget === 'shirt' ? '#1e40af' : '#be185d'
+            }}>
+                {layer.canvasTarget === 'shirt' ? 'S' : 'P'}
             </div>
             
             {/* Thumbnail */}
@@ -162,7 +172,7 @@ export default function PropertiesPanel() {
                 border: '1px solid #e2e8f0', marginRight: '10px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
             }}>
-                {layer.type === 'image' && layer.object.getSrc ? (
+                {layer.type === 'Sticker' && layer.object?.getSrc ? (
                     <img src={layer.object.getSrc()} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
                 ) : (
                     <i className="fa-solid fa-pencil" style={{fontSize: '10px', color: '#cbd5e1'}}></i>
@@ -174,10 +184,17 @@ export default function PropertiesPanel() {
             </div>
             
             <div style={{ display: 'flex', gap: '4px' }}>
-                <button onClick={(e) => { e.stopPropagation(); toggleVisibility(layer, name) }} style={layerBtnStyle}>
+                {/* Reorder buttons */}
+                <button onClick={(e) => { e.stopPropagation(); updateLayerOrder(layer.id, 'up') }} style={layerBtnStyle} title="Move up">
+                    <i className="fa-solid fa-chevron-up" style={{fontSize: '10px'}}></i>
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); updateLayerOrder(layer.id, 'down') }} style={layerBtnStyle} title="Move down">
+                    <i className="fa-solid fa-chevron-down" style={{fontSize: '10px'}}></i>
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); toggleVisibility(layer) }} style={layerBtnStyle}>
                     <i className={`fa-regular ${layer.visible ? 'fa-eye' : 'fa-eye-slash'}`}></i>
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); deleteLayer(layer, name) }} style={{...layerBtnStyle, color: '#ef4444'}}>
+                <button onClick={(e) => { e.stopPropagation(); deleteLayer(layer) }} style={{...layerBtnStyle, color: '#ef4444'}}>
                     <i className="fa-regular fa-trash-can"></i>
                 </button>
             </div>
@@ -252,17 +269,48 @@ export default function PropertiesPanel() {
         return (
           <div className="panel-content">
              <h2 style={headerStyle}>Layers</h2>
-             <div style={{ marginBottom: '20px' }}>
-                 <h3 style={subHeaderStyle}>Shirt Layers</h3>
-                 <div style={layerGroupStyle}>
-                    {renderLayerList(layers.shirt, 'shirt')}
-                 </div>
+             
+             {/* Torso Priority Indicator */}
+             <div style={{ 
+               marginBottom: '20px', 
+               padding: '12px', 
+               backgroundColor: '#f0f9ff', 
+               borderRadius: '8px',
+               border: '1px solid #bae6fd'
+             }}>
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1', textTransform: 'uppercase' }}>
+                   Torso Texture
+                 </span>
+                 <button 
+                   onClick={() => {
+                     const newPriority = torsoPriority === 'shirt' ? 'pants' : 'shirt'
+                     setTorsoPriority(newPriority)
+                     triggerTextureUpdate()
+                   }}
+                   style={{ 
+                     padding: '4px 10px', 
+                     fontSize: '0.75rem', 
+                     backgroundColor: '#0ea5e9', 
+                     color: 'white', 
+                     border: 'none', 
+                     borderRadius: '4px',
+                     cursor: 'pointer'
+                   }}
+                 >
+                   Swap
+                 </button>
+               </div>
+               <div style={{ fontSize: '0.85rem', color: '#0c4a6e' }}>
+                 Using: <strong>{torsoPriority === 'shirt' ? 'Shirt' : 'Pants'}</strong> texture
+               </div>
              </div>
              
-             <div>
-                 <h3 style={subHeaderStyle}>Pants Layers</h3>
+             {/* Unified Layer List */}
+             <div style={{ marginBottom: '20px' }}>
+                 <h3 style={subHeaderStyle}>All Layers (Top = Priority)</h3>
                  <div style={layerGroupStyle}>
-                    {renderLayerList(layers.pants, 'pants')}
+                    {renderUnifiedLayerList()}
                  </div>
              </div>
           </div>
