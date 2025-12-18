@@ -4,10 +4,30 @@ import React, { useRef } from 'react'
 import { Image as FabImage } from 'fabric'
 import { useEditor } from './EditorContext'
 
+// Brush style definitions with SVG patterns for visual preview
+const BRUSH_STYLES = [
+  { id: 'basic', name: 'Basic', icon: 'fa-pencil' },
+  { id: 'spray', name: 'Spray', icon: 'fa-spray-can' },
+  { id: 'circle', name: 'Circle', icon: 'fa-circle' },
+  { id: 'marker', name: 'Marker', icon: 'fa-marker' },
+  { id: 'stars', name: 'Stars', icon: 'fa-star' },
+  { id: 'dots', name: 'Dots', icon: 'fa-circle-dot' },
+  { id: 'hearts', name: 'Hearts', icon: 'fa-heart' },
+  { id: 'lightning', name: 'Lightning', icon: 'fa-bolt' },
+  { id: 'spirals', name: 'Spirals', icon: 'fa-hurricane' },
+  { id: 'splatter', name: 'Splatter', icon: 'fa-droplet' },
+  { id: 'flowers', name: 'Flowers', icon: 'fa-clover' },
+  { id: 'squares', name: 'Squares', icon: 'fa-square' },
+  { id: 'triangles', name: 'Triangles', icon: 'fa-caret-up' },
+  { id: 'diamonds', name: 'Diamonds', icon: 'fa-diamond' },
+  { id: 'crosshatch', name: 'Crosshatch', icon: 'fa-grip' },
+]
+
 export default function PropertiesPanel() {
   const { 
     activeTab, 
     brushColor, updateBrush, brushSize, isEraser,
+    brushStyle,
     activeLayerId, setActiveLayerId, layers, syncLayers, updateLayerOrder,
     fabricRefShirt, fabricRefPants,
     // UV Placement
@@ -248,20 +268,76 @@ export default function PropertiesPanel() {
       case 'draw':
         return (
           <div className="panel-content">
-             <h2 style={headerStyle}>Brushes</h2>
-             <p style={{fontSize:'0.9rem', color:'var(--text-muted)', marginBottom:'20px'}}>Select a brush style</p>
+             <h2 style={headerStyle}>Add brush layer</h2>
              
-             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-                 {['Basic', 'Airbrush', 'Marker', 'Pixel'].map(b => (
-                     <div key={b} style={{
-                         padding:'15px', border:'1px solid var(--border)', borderRadius:'8px',
-                         textAlign:'center', fontSize:'0.9rem', cursor:'pointer',
-                         backgroundColor:'white', color:'var(--text-main)',
-                         boxShadow:'0 1px 2px rgba(0,0,0,0.05)'
-                     }}>
-                         {b}
-                     </div>
-                 ))}
+             {/* Brush Style Grid */}
+             <div style={{
+               display: 'grid', 
+               gridTemplateColumns: 'repeat(3, 1fr)', 
+               gap: '10px',
+               marginTop: '20px'
+             }}>
+               {BRUSH_STYLES.map(brush => (
+                 <div 
+                   key={brush.id} 
+                   onClick={() => updateBrush({ style: brush.id })}
+                   style={{
+                     aspectRatio: '1',
+                     border: brushStyle === brush.id 
+                       ? '2px solid var(--primary)' 
+                       : '1px solid var(--border)',
+                     borderRadius: '8px',
+                     cursor: 'pointer',
+                     display: 'flex',
+                     flexDirection: 'column',
+                     alignItems: 'center',
+                     justifyContent: 'center',
+                     gap: '8px',
+                     backgroundColor: brushStyle === brush.id 
+                       ? 'rgba(99, 102, 241, 0.1)' 
+                       : 'var(--bg-workspace)',
+                     transition: 'all 0.2s',
+                     boxShadow: brushStyle === brush.id 
+                       ? '0 0 0 2px rgba(99, 102, 241, 0.3)' 
+                       : 'none'
+                   }}
+                   onMouseEnter={(e) => {
+                     if (brushStyle !== brush.id) {
+                       e.currentTarget.style.borderColor = 'var(--primary)'
+                       e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.05)'
+                     }
+                   }}
+                   onMouseLeave={(e) => {
+                     if (brushStyle !== brush.id) {
+                       e.currentTarget.style.borderColor = 'var(--border)'
+                       e.currentTarget.style.backgroundColor = 'var(--bg-workspace)'
+                     }
+                   }}
+                 >
+                   {/* Wave pattern SVG to visualize brush style */}
+                   <svg width="60" height="30" viewBox="0 0 60 30" style={{ opacity: 0.7 }}>
+                     <path 
+                       d="M5,15 Q15,5 25,15 T45,15 T55,15" 
+                       fill="none" 
+                       stroke="var(--text-muted)" 
+                       strokeWidth="3"
+                       strokeLinecap="round"
+                       style={{
+                         strokeDasharray: brush.id === 'dots' ? '1,6' : 
+                                         brush.id === 'stars' ? '2,8' :
+                                         brush.id === 'splatter' ? '3,4,1,4' : 'none'
+                       }}
+                     />
+                   </svg>
+                   <span style={{ 
+                     fontSize: '10px', 
+                     color: 'var(--text-muted)',
+                     fontWeight: 500 
+                   }}>
+                     {brush.name}
+                   </span>
+                 </div>
+               ))}
              </div>
           </div>
         )

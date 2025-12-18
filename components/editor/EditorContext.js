@@ -14,8 +14,13 @@ export function EditorProvider({ children }) {
 
   // Tool State
   const [brushColor, setBrushColor] = useState('#ff0000')
-  const [brushSize, setBrushSize] = useState(5)
+  const [brushSize, setBrushSize] = useState(15)
   const [isEraser, setIsEraser] = useState(false)
+  const [brushOpacity, setBrushOpacity] = useState(100) // 0-100 percentage
+  const [brushSoftness, setBrushSoftness] = useState(1) // 1-10 blur/feather
+  const [brushSpacing, setBrushSpacing] = useState(1) // 1-100 spacing (1=continuous, >20=dotted)
+  const [brushStyle, setBrushStyle] = useState('basic') // basic, spray, circle, pattern
+  const [brushText, setBrushText] = useState('ABCD') // Text to use for text brush
 
   // Canvas State - Single ordered array of all layers
   const [activeLayerId, setActiveLayerId] = useState(null) // Use ID for active layer
@@ -49,10 +54,23 @@ export function EditorProvider({ children }) {
   const isSyncingRef = useRef(false)
 
   // Actions
-  const updateBrush = (color, size, eraser) => {
+  const updateBrush = (updates) => {
+    // Handle legacy calls: updateBrush(color, size, eraser)
+    if (typeof updates !== 'object' || updates === null) {
+      const [color, size, eraser] = arguments
+      updates = { color, size, eraser }
+    }
+    
+    const { color, size, eraser, opacity, softness, spacing, style, text } = updates
+    
     if (color !== undefined) setBrushColor(color)
     if (size !== undefined) setBrushSize(size)
     if (eraser !== undefined) setIsEraser(eraser)
+    if (opacity !== undefined) setBrushOpacity(opacity)
+    if (softness !== undefined) setBrushSoftness(softness)
+    if (spacing !== undefined) setBrushSpacing(spacing)
+    if (style !== undefined) setBrushStyle(style)
+    if (text !== undefined) setBrushText(text)
     
     // Apply to fabric instances if they exist
     [fabricRefShirt.current, fabricRefPants.current].forEach(canvas => {
@@ -72,14 +90,20 @@ export function EditorProvider({ children }) {
         if (!canvas) return []
         // Collect objects, assigning which canvas they belong to
         return canvas.getObjects().filter(o => !o.excludeFromExport)
-            .map(o => ({
-                id: o.uid || Math.random().toString(36).substr(2, 9),
-                type: o.type === 'image' ? 'Sticker' : 'Drawing',
-                name: o.customName || `${o.type === 'image' ? 'Sticker' : 'Drawing'}`,
-                visible: o.visible,
-                canvasTarget: target, // 'shirt' or 'pants'
-                object: o // Keep reference
-            }))
+            .map(o => {
+                // Assign UID if object doesn't have one (first time seeing it)
+                if (!o.uid) {
+                  o.uid = Math.random().toString(36).substr(2, 9)
+                }
+                return {
+                  id: o.uid,
+                  type: o.type === 'image' ? 'Sticker' : 'Drawing',
+                  name: o.customName || `${o.type === 'image' ? 'Sticker' : 'Drawing'}`,
+                  visible: o.visible,
+                  canvasTarget: target, // 'shirt' or 'pants'
+                  object: o // Keep reference
+                }
+            })
     }
 
     const shirtObjects = getLayerObjects(fabricRefShirt.current, 'shirt')
@@ -229,6 +253,12 @@ export function EditorProvider({ children }) {
     brushColor,
     brushSize,
     isEraser,
+    brushOpacity,
+    brushSoftness,
+    brushSpacing,
+    brushStyle,
+    brushText,
+    setBrushText,
     updateBrush,
     activeLayerId,
     setActiveLayerId,

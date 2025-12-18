@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import Sidebar from './Sidebar'
 import PropertiesPanel from './PropertiesPanel'
 import CanvasArea from './CanvasArea'
+import RightPanel from './RightPanel'
 import ThreePreview from './ThreePreview'
 import UVPlacementModal from './UVPlacementModal'
 
@@ -126,6 +127,9 @@ export default function EditorLayout() {
       <CollapsiblePanel isCollapsed={isCanvasCollapsed} maxWidth={CANVAS_MAX} side="right">
         <CanvasArea />
       </CollapsiblePanel>
+
+      {/* 5. Right Settings Panel (Draw settings, etc.) */}
+      <RightPanel />
 
       {/* UV Placement Modal (renders when active) */}
       <UVPlacementModal />
