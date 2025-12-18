@@ -50,6 +50,10 @@ export function EditorProvider({ children }) {
   const cleanTextureShirtRef = useRef(null)
   const cleanTexturePantsRef = useRef(null)
   
+  // Refs for UV triangle data from GLB model
+  const uvTrianglesShirtRef = useRef([])
+  const uvTrianglesPantsRef = useRef([])
+  
   // Flag to prevent re-entrant syncLayers calls (prevents infinite loop)
   const isSyncingRef = useRef(false)
 
@@ -246,6 +250,226 @@ export function EditorProvider({ children }) {
     cleanTextureShirtRef.current = shirtCanvas
     cleanTexturePantsRef.current = pantsCanvas
   }
+  
+  // Helper function to create UV clipping mask for shirt template
+  const createShirtUVMask = (ctx) => {
+    // Roblox shirt UV map - exact coordinates for 585x559 template
+    
+    ctx.beginPath()
+    
+    // Top/Neck section
+    ctx.rect(195, 0, 195, 128)
+    
+    // Middle row - Arms and Torso
+    // Left Arm
+    ctx.rect(0, 128, 128, 128)
+    // Torso (Front, Back, Left, Right sides)
+    ctx.rect(128, 128, 320, 128)
+    // Right Arm
+    ctx.rect(448, 128, 128, 128)
+    
+    // Bottom Torso section
+    ctx.rect(195, 256, 195, 128)
+    
+    ctx.closePath()
+  }
+  
+  // Helper function to create UV clipping mask for pants template
+  const createPantsUVMask = (ctx) => {
+    // Roblox pants UV map - exact coordinates for 585x559 template
+    
+    ctx.beginPath()
+    
+    // Upper Torso section
+    ctx.rect(195, 0, 195, 128)
+    
+    // Middle Torso section
+    ctx.rect(128, 128, 320, 128)
+    
+    // Legs section
+    // Left Leg
+    ctx.rect(0, 256, 195, 128)
+    // Center/Crotch area
+    ctx.rect(195, 256, 195, 128)
+    // Right Leg
+    ctx.rect(390, 256, 195, 128)
+    
+    ctx.closePath()
+  }
+  
+  
+  // Download functions - use destination-in masking with UV triangles (matches reference code)
+  const downloadShirtTemplate = async () => {
+    if (!fabricRefShirt.current) return
+    
+    const fabricCanvas = fabricRefShirt.current
+    const triangles = uvTrianglesShirtRef.current
+    
+    // Hide wireframe temporarily
+    const hiddenObjects = []
+    fabricCanvas.getObjects().forEach(obj => {
+      if (obj.excludeFromExport && obj.visible) {
+        obj.visible = false
+        hiddenObjects.push(obj)
+      }
+    })
+    
+    // Export canvas content
+    const exportedCanvas = fabricCanvas.toCanvasElement()
+    
+    // Restore wireframe
+    hiddenObjects.forEach(obj => {
+      obj.visible = true
+    })
+    
+    // Create final canvas for masked output
+    const maskCanvas = document.createElement('canvas')
+    maskCanvas.width = 585
+    maskCanvas.height = 559
+    const ctx = maskCanvas.getContext('2d')
+    
+    // Step 1: Draw exported content
+    ctx.drawImage(exportedCanvas, 0, 0)
+    
+    // Step 2: Apply UV mask using destination-in (matches reference code)
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.fillStyle = 'white'
+    ctx.beginPath()
+    
+    // Fill UV triangles
+    triangles.forEach(tri => {
+      ctx.moveTo(tri.u1, tri.v1)
+      ctx.lineTo(tri.u2, tri.v2)
+      ctx.lineTo(tri.u3, tri.v3)
+    })
+    
+    ctx.fill()
+    
+    // Download
+    const link = document.createElement('a')
+    link.download = `shirt-template-${Date.now()}.png`
+    link.href = maskCanvas.toDataURL('image/png')
+    link.click()
+  }
+  
+  const downloadPantsTemplate = async () => {
+    if (!fabricRefPants.current) return
+    
+    const fabricCanvas = fabricRefPants.current
+    const triangles = uvTrianglesPantsRef.current
+    
+    // Hide wireframe temporarily
+    const hiddenObjects = []
+    fabricCanvas.getObjects().forEach(obj => {
+      if (obj.excludeFromExport && obj.visible) {
+        obj.visible = false
+        hiddenObjects.push(obj)
+      }
+    })
+    
+    // Export canvas content
+    const exportedCanvas = fabricCanvas.toCanvasElement()
+    
+    // Restore wireframe
+    hiddenObjects.forEach(obj => {
+      obj.visible = true
+    })
+    
+    // Create final canvas for masked output
+    const maskCanvas = document.createElement('canvas')
+    maskCanvas.width = 585
+    maskCanvas.height = 559
+    const ctx = maskCanvas.getContext('2d')
+    
+    // Step 1: Draw exported content
+    ctx.drawImage(exportedCanvas, 0, 0)
+    
+    // Step 2: Apply UV mask using destination-in (matches reference code)
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.fillStyle = 'white'
+    ctx.beginPath()
+    
+    // Fill UV triangles
+    triangles.forEach(tri => {
+      ctx.moveTo(tri.u1, tri.v1)
+      ctx.lineTo(tri.u2, tri.v2)
+      ctx.lineTo(tri.u3, tri.v3)
+    })
+    
+    ctx.fill()
+    
+    // Download
+    const link = document.createElement('a')
+    link.download = `pants-template-${Date.now()}.png`
+    link.href = maskCanvas.toDataURL('image/png')
+    link.click()
+  }
+  
+  // Download Arms texture only
+  const downloadArmsTexture = () => {
+    if (!fabricRefShirt.current) return
+    updateCleanTextures()
+    
+    const canvas = cleanTextureShirtRef.current
+    if (!canvas) return
+    
+    const templateCanvas = document.createElement('canvas')
+    templateCanvas.width = 585
+    templateCanvas.height = 559
+    const ctx = templateCanvas.getContext('2d')
+    
+    // Clip to arms only
+    ctx.save()
+    ctx.beginPath()
+    // Left Arm
+    ctx.rect(0, 99, 128, 192)
+    // Right Arm
+    ctx.rect(448, 99, 128, 192)
+    ctx.closePath()
+    ctx.clip()
+    
+    ctx.drawImage(canvas, 0, 0, Math.min(canvas.width, 585), Math.min(canvas.height, 559), 0, 0, 585, 559)
+    ctx.restore()
+    
+    const link = document.createElement('a')
+    link.download = `arms-texture-${Date.now()}.png`
+    link.href = templateCanvas.toDataURL('image/png')
+    link.click()
+  }
+  
+  // Download Torso texture only
+  const downloadTorsoTexture = () => {
+    if (!fabricRefShirt.current) return
+    updateCleanTextures()
+    
+    const canvas = cleanTextureShirtRef.current
+    if (!canvas) return
+    
+    const templateCanvas = document.createElement('canvas')
+    templateCanvas.width = 585
+    templateCanvas.height = 559
+    const ctx = templateCanvas.getContext('2d')
+    
+    // Clip to torso only
+    ctx.save()
+    ctx.beginPath()
+    // Top section
+    ctx.rect(195, 0, 195, 99)
+    // Middle torso
+    ctx.rect(128, 99, 320, 192)
+    // Bottom torso
+    ctx.rect(195, 291, 195, 268)
+    ctx.closePath()
+    ctx.clip()
+    
+    ctx.drawImage(canvas, 0, 0, Math.min(canvas.width, 585), Math.min(canvas.height, 559), 0, 0, 585, 559)
+    ctx.restore()
+    
+    const link = document.createElement('a')
+    link.download = `torso-texture-${Date.now()}.png`
+    link.href = templateCanvas.toDataURL('image/png')
+    link.click()
+  }
 
   const value = {
     activeTab,
@@ -281,7 +505,15 @@ export function EditorProvider({ children }) {
     setUvImageData,
     // Clean texture refs for 3D model
     cleanTextureShirtRef,
-    cleanTexturePantsRef
+    cleanTexturePantsRef,
+    // UV triangle data from GLB model
+    uvTrianglesShirtRef,
+    uvTrianglesPantsRef,
+    // Download functions
+    downloadShirtTemplate,
+    downloadPantsTemplate,
+    downloadArmsTexture,
+    downloadTorsoTexture
   }
 
   return (
@@ -290,3 +522,4 @@ export function EditorProvider({ children }) {
     </EditorContext.Provider>
   )
 }
+

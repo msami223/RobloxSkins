@@ -44,9 +44,30 @@ export default function PropertiesPanel() {
     const reader = new FileReader()
     reader.onload = (f) => {
       FabImage.fromURL(f.target.result).then(img => {
-        if (img.width > 300) img.scaleToWidth(300)
-        canvasRef.current.add(img)
-        canvasRef.current.centerObject(img)
+        // Auto-scale logic for Roblox templates (585x559)
+        // If image is square-ish and close to template size or aspect ratio matches
+        const isTemplate = (img.width === 585 && img.height === 559) || 
+                           (Math.abs(img.width / img.height - 585/559) < 0.01)
+
+        if (isTemplate) {
+          // It's a template! Fit exactly to canvas
+          img.scaleToWidth(585)
+          img.scaleToHeight(559)
+          img.set({
+            left: 0,
+            top: 0,
+            originX: 'left',
+            originY: 'top'
+          })
+          canvasRef.current.add(img)
+          // Do NOT center - keep at 0,0
+        } else {
+          // Standard image upload behavior
+          if (img.width > 300) img.scaleToWidth(300)
+          canvasRef.current.add(img)
+          canvasRef.current.centerObject(img)
+        }
+        
         canvasRef.current.setActiveObject(img)
         canvasRef.current.renderAll()
         syncLayers() // Trigger sync immediately

@@ -15,8 +15,7 @@ export default function ThreePreview() {
     currentModel, 
     setCurrentModel,
     cleanTextureShirtRef,
-    cleanTexturePantsRef,
-    torsoPriority // NEW: for torso texture priority
+    cleanTexturePantsRef
   } = useEditor()
   
   // Refs for Three.js objects to survive re-renders
@@ -223,8 +222,8 @@ export default function ThreePreview() {
   }, [currentModel]) // Re-run when model changes
 
   // Material Update Logic
-  // BOT mesh (pants) uses depthWrite=false so TOP mesh (shirt) always renders on top
-  // Combined with pants torso being masked in EditorContext, this eliminates z-fighting
+  // Both TOP (shirt) and BOT (pants) render with transparency and alpha blending
+  // Shirt renders on top, pants below, both visible
   const updateModelMaterials = () => {
      if (!modelRef.current) return
      
@@ -245,32 +244,16 @@ export default function ThreePreview() {
                 return  // Exit early, don't apply texture logic
             }
 
-            // BOT mesh (pants/legs)
+            // BOT mesh (pants/legs) - renders below shirt with transparency
             if (name.includes('bot')) {
                 mat.map = texturePantsRef.current
-                // Render order based on torsoPriority
-                if (torsoPriority === 'pants') {
-                    // Pants has priority - render ON TOP
-                    mat.depthWrite = true
-                    child.renderOrder = 1
-                } else {
-                    // Shirt has priority - pants renders behind
-                    mat.depthWrite = false
-                    child.renderOrder = 0
-                }
+                mat.depthWrite = true
+                child.renderOrder = 0 // Render first (behind)
             } else if (name.includes('top')) {
-                // TOP mesh (shirt/torso/arms)
+                // TOP mesh (shirt/torso/arms) - renders on top with transparency
                 mat.map = textureShirtRef.current
-                // Render order based on torsoPriority
-                if (torsoPriority === 'shirt') {
-                    // Shirt has priority - render ON TOP
-                    mat.depthWrite = true
-                    child.renderOrder = 1
-                } else {
-                    // Pants has priority - shirt renders behind
-                    mat.depthWrite = false
-                    child.renderOrder = 0
-                }
+                mat.depthWrite = true
+                child.renderOrder = 1 // Render last (on top)
             } else {
                 // Any other mesh - use shirt texture as fallback
                 mat.map = textureShirtRef.current
@@ -281,11 +264,11 @@ export default function ThreePreview() {
             // Render both sides of faces
             mat.side = THREE.DoubleSide
 
-            // Apply material settings based on whether texture exists
+            // Apply transparent material settings for alpha blending
             if (mat.map && mat.map.image) {
-                // Has texture - make transparent for alpha cutout
+                // Has texture - make transparent for alpha blending
                 mat.transparent = true
-                mat.alphaTest = 0.1 
+                mat.alphaTest = 0.1  // Discard pixels below this alpha
                 mat.opacity = 1
                 if (mat.color) mat.color.setHex(0xffffff)
             } else {
@@ -318,7 +301,7 @@ export default function ThreePreview() {
     // Ensure materials are linked
     updateModelMaterials()
 
-  }, [textureUpdateTrigger, currentModel, torsoPriority])  // Removed ref.current - they cause infinite loops
+  }, [textureUpdateTrigger, currentModel])  // Removed torsoPriority - both textures always render with alpha blending
 
   return (
     <div style={{ 

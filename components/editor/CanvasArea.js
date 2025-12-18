@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Canvas, PencilBrush, SprayBrush, CircleBrush, Shadow, Image as FabImage, Line, Group, Circle, PatternBrush } from 'fabric'
+import * as fabric from 'fabric'
 import { useEditor } from './EditorContext'
 
 // Constants for canvas dimensions
@@ -24,7 +25,10 @@ export default function CanvasArea() {
     brushStyle,
     brushText,
     activeTab, 
-    syncLayers 
+    syncLayers,
+    // UV triangle refs from context
+    uvTrianglesShirtRef,
+    uvTrianglesPantsRef
   } = useEditor()
   
   // Refs
@@ -78,6 +82,7 @@ export default function CanvasArea() {
           hoverCursor: 'default',
           left: 0,
           top: 0,
+          opacity: 1.0,  // Make wireframe fully visible
           excludeFromExport: true  // Don't include in texture export to 3D model
         })
         wireframeRef.current = img
@@ -90,19 +95,146 @@ export default function CanvasArea() {
       }
     }
     
+    // Helper to extract UV map from GLB and draw wireframe on HTML canvas overlay
+    const loadAndDrawUVFromModel = async (fabricCanvas, wireframeRef, meshName, uvTrianglesRef, canvasId) => {
+      try {
+        // Dynamically import GLTFLoader
+        const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js')
+        
+        const loader = new GLTFLoader()
+        const modelPath = '/models/roblox_model_blocky.glb'
+        
+        loader.load(modelPath, (gltf) => {
+          const model = gltf.scene
+          const triangles = [] // Store triangle coordinates
+          
+          // Find the target mesh (TOP for shirt, BOT for pants)
+          model.traverse((child) => {
+            if (child.isMesh) {
+              const name = child.name.toLowerCase()
+              
+              // Match mesh name (TOP for shirt, BOT for pants)
+              if ((meshName === 'shirt' && name.includes('top')) ||
+                  (meshName === 'pants' && name.includes('bot'))) {
+                
+                const geometry = child.geometry
+                const uvAttribute = geometry.attributes.uv
+                
+                if (!uvAttribute) {
+                  console.warn('No UV attribute found for', child.name)
+                  return
+                }
+                
+                // Get triangles from geometry
+                const indices = geometry.index
+                if (!indices) {
+                  console.warn('No indices found for', child.name)
+                  return
+                }
+                
+                // Extract UV triangles
+                for (let i = 0; i < indices.count; i += 3) {
+                  const i1 = indices.array[i]
+                  const i2 = indices.array[i + 1]
+                  const i3 = indices.array[i + 2]
+                  
+                  // Get UV coordinates (scaled to canvas size) - DIRECT mapping like reference code
+                  // No inversions - same coords used for BOTH wireframe AND clipPath
+                  const u1 = uvAttribute.array[i1 * 2] * CANVAS_WIDTH
+                  const v1 = uvAttribute.array[i1 * 2 + 1] * CANVAS_HEIGHT
+                  const u2 = uvAttribute.array[i2 * 2] * CANVAS_WIDTH
+                  const v2 = uvAttribute.array[i2 * 2 + 1] * CANVAS_HEIGHT
+                  const u3 = uvAttribute.array[i3 * 2] * CANVAS_WIDTH
+                  const v3 = uvAttribute.array[i3 * 2 + 1] * CANVAS_HEIGHT
+                  
+                  // Store coordinates (same for both wireframe and clipPath)
+                  triangles.push({ u1, v1, u2, v2, u3, v3 })
+                }
+              }
+            }
+          })
+          
+          if (triangles.length > 0) {
+            // Store triangle data for download masking (uses inverted V for proper export)
+            uvTrianglesRef.current = triangles
+            
+            // Create Fabric clipPath from UV triangles (uses inverted V coordinates)
+            const trianglePaths = triangles.map(tri => {
+              return `M ${tri.u1} ${tri.v1} L ${tri.u2} ${tri.v2} L ${tri.u3} ${tri.v3} Z`
+            })
+            const pathString = trianglePaths.join(' ')
+            
+            const clipPath = new fabric.Path(pathString, {
+              absolutePositioned: true,
+              inverted: false,
+              fillRule: 'nonzero'
+            })
+            
+            // Apply clipping to Fabric canvas (REAL-TIME)
+            fabricCanvas.clipPath = clipPath
+            fabricCanvas.renderAll()
+            
+            // Create HTML canvas overlay for wireframe (uses normal V coordinates)
+            const overlayCanvas = document.createElement('canvas')
+            overlayCanvas.width = CANVAS_WIDTH
+            overlayCanvas.height = CANVAS_HEIGHT
+            overlayCanvas.style.position = 'absolute'
+            overlayCanvas.style.top = '0'
+            overlayCanvas.style.left = '0'
+            overlayCanvas.style.pointerEvents = 'none' // Don't block Fabric interactions
+            overlayCanvas.style.zIndex = '10' // Above Fabric canvas
+            
+            // Get HTML canvas element container
+            const fabricCanvasEl = document.getElementById(canvasId)
+            if (fabricCanvasEl && fabricCanvasEl.parentElement) {
+              // Position parent relatively for absolute overlay
+              if (fabricCanvasEl.parentElement.style.position !== 'relative') {
+                fabricCanvasEl.parentElement.style.position = 'relative'
+              }
+              fabricCanvasEl.parentElement.appendChild(overlayCanvas)
+            }
+            
+            // Draw wireframe using vanilla Canvas 2D with display coordinates
+            const ctx = overlayCanvas.getContext('2d')
+            ctx.strokeStyle = '#f093fb'
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            
+            triangles.forEach(tri => {
+              ctx.moveTo(tri.u1, tri.v1)
+              ctx.lineTo(tri.u2, tri.v2)
+              ctx.lineTo(tri.u3, tri.v3)
+              ctx.lineTo(tri.u1, tri.v1) // Close triangle
+            })
+            
+            ctx.stroke()
+            
+            wireframeRef.current = overlayCanvas
+            
+            console.log(`Loaded ${triangles.length} UV triangles for ${meshName} with real-time clipping`)
+          } else {
+            console.warn('No UV triangles extracted for', meshName)
+          }
+        }, undefined, (error) => {
+          console.error('Error loading GLB model for UV extraction:', error)
+        })
+      } catch (err) {
+        console.error('Failed to extract UV from model:', err)
+      }
+    }
+    
     if (!fabricRefShirt.current) {
       const cShirt = new Canvas('canvas-shirt', { 
         width: CANVAS_WIDTH, 
         height: CANVAS_HEIGHT, 
         isDrawingMode: false,
         backgroundColor: null,
-        selection: false,  // Disable object selection to prevent interference
-        preserveObjectStacking: true  // Keep drawn objects in their layer order
+        selection: false,
+        preserveObjectStacking: true
       })
       fabricRefShirt.current = cShirt
-      loadTemplateObject(cShirt, '/templates/roblox_background_frame.348e21bb.png', wireframeShirtRef)
-      // NOTE: Removed after:render listener - it causes infinite loops
-      // Object events (add, remove, modify) handled separately are sufficient
+      // Load UV wireframe from GLB model - draws on HTML canvas overlay
+      loadAndDrawUVFromModel(cShirt, wireframeShirtRef, 'shirt', uvTrianglesShirtRef, 'canvas-shirt')
     }
 
     if (!fabricRefPants.current) {
@@ -111,12 +243,12 @@ export default function CanvasArea() {
         height: CANVAS_HEIGHT, 
         isDrawingMode: false,
         backgroundColor: null,
-        selection: false,  // Disable object selection to prevent interference
-        preserveObjectStacking: true  // Keep drawn objects in their layer order
+        selection: false,
+        preserveObjectStacking: true
       })
       fabricRefPants.current = cPants
-      loadTemplateObject(cPants, '/templates/roblox_background_frame.348e21bc.png', wireframePantsRef)
-      // NOTE: Removed after:render listener - it causes infinite loops
+      // Load UV wireframe from GLB model - draws on HTML canvas overlay
+      loadAndDrawUVFromModel(cPants, wireframePantsRef, 'pants', uvTrianglesPantsRef, 'canvas-pants')
     }
 
     // Configure brushes
@@ -740,8 +872,6 @@ export default function CanvasArea() {
           canvas.renderAll()
           // Keep reference for grouping later
           strokeStamps.current.push(stamp)
-          // Trigger 3D texture update immediately
-          debouncedTextureUpdate()
         }
       }
     }
@@ -789,7 +919,7 @@ export default function CanvasArea() {
           if (stampPromise) stampPromises.push(stampPromise)
         }
         
-        // Wait for all stamps to be created (ensures complete images)
+        // Wait for all stamps to be created
         const stamps = await Promise.all(stampPromises)
         stamps.forEach(stamp => {
           if (stamp) {
@@ -801,8 +931,6 @@ export default function CanvasArea() {
         })
         // Render all new stamps at once for better performance
         canvas.renderAll()
-        // Trigger 3D texture update after stamps are rendered
-        debouncedTextureUpdate()
         
         lastDrawPos.current = {
           x: lastDrawPos.current.x + stepX * steps,
@@ -822,7 +950,6 @@ export default function CanvasArea() {
         })
         
         // Group all stamps into a single object
-        // This group will be properly exported by toCanvasElement()
         const group = new Group(strokeStamps.current, {
           selectable: false,
           evented: false,
@@ -832,12 +959,6 @@ export default function CanvasArea() {
         // Add the grouped object to canvas
         canvas.add(group)
         canvas.renderAll()
-        
-        // Final texture update with completed group
-        // This ensures 3D model gets the grouped stamps
-        debouncedTextureUpdate()
-        
-        // Sync layers to update UI
         syncLayers()
       }
       

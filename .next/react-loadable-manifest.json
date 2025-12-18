@@ -1,4 +1,8 @@
 {
+  "components\\editor\\CanvasArea.js -> three/addons/loaders/GLTFLoader.js": {
+    "id": "components\\editor\\CanvasArea.js -> three/addons/loaders/GLTFLoader.js",
+    "files": []
+  },
   "node_modules\\next\\dist\\client\\dev\\hot-reloader\\app\\use-websocket.js -> @vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/hmr-client.ts": {
     "id": "node_modules\\next\\dist\\client\\dev\\hot-reloader\\app\\use-websocket.js -> @vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/hmr-client.ts",
     "files": [
