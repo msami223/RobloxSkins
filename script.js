@@ -56,10 +56,17 @@ const getTriangleUVs = (uvAttribute, indices, i, width, height) => {
     const i3 = indices[i + 2];
 
     // Standard orientation: U = U, V = V (matches user's "back to standard" state)
-    // Note: If V needs inversion (1-V) related to flipY, verify with current "Perfect" state.
-    // The last "Perfect" state had:
-    // u1 = uvAttribute.array[i1 * 2] * width;
-    // v1 = uvAttribute.array[i1 * 2 + 1] * height;
+    // Note: V is naturally inverted in Canvas (0,0 is top-left) vs UV (0,0 is bot-left)
+    // Three.js texture.flipY = false handles the WebGL <-> Image mismatch.
+    // For drawing ON canvas, we rely on the data being correct.
+    // If we want 1:1, we should map UV 0..1 to Canvas 0..Height (maybe inverted Y?)
+
+    // UV space (0..1) where 0,0 is bottom-left.
+    // Canvas space (0..H) where 0,0 is top-left.
+    // To match visual expectation, usually we invert V for drawing: y = (1 - v) * height
+    // BUT the user asked for standard orientation after flip-flopping.
+    // Let's stick to the configuration that the USER approved as "Perfect" (Step 209).
+    // u = array[..], v = array[..+1]
 
     return {
         u1: uvAttribute.array[i1 * 2] * width,
@@ -95,11 +102,18 @@ function drawUVMaps(uvMapInfo) {
             const ctx = uvCanvas.getContext('2d');
 
             let textureImage = null;
+
+            // Smart default: If name contains "top" or "layer", give it higher priority
+            const isTopLayer = meshInfo.name.toLowerCase().includes('top') ||
+                meshInfo.name.toLowerCase().includes('layer') ||
+                meshInfo.name.toLowerCase().includes('shirt');
+
             let textureTransform = {
                 scale: 1,
                 rotation: 0,
                 x: uvCanvas.width / 2,
-                y: uvCanvas.height / 2
+                y: uvCanvas.height / 2,
+                zLayer: isTopLayer ? 1 : 0 // Default Z-Layer
             };
 
             let isDragging = false;
@@ -172,7 +186,7 @@ function drawUVMaps(uvMapInfo) {
                 const uvAttribute = uvData.data;
 
                 ctx.strokeStyle = '#f093fb';
-                ctx.lineWidth = 2; // Keep wireframe visible
+                ctx.lineWidth = 2;
 
                 if (geometry.index) {
                     const indices = geometry.index.array;
@@ -182,7 +196,7 @@ function drawUVMaps(uvMapInfo) {
                         ctx.moveTo(uvs.u1, uvs.v1);
                         ctx.lineTo(uvs.u2, uvs.v2);
                         ctx.lineTo(uvs.u3, uvs.v3);
-                        ctx.lineTo(uvs.u1, uvs.v1); // Close loop
+                        ctx.lineTo(uvs.u1, uvs.v1);
                     }
                     ctx.stroke();
                 }
@@ -233,31 +247,21 @@ function drawUVMaps(uvMapInfo) {
 
             const redrawCanvas = () => {
                 ctx.clearRect(0, 0, uvCanvas.width, uvCanvas.height);
-
-                // 1. Background
                 ctx.fillStyle = '#1a1a2e';
                 ctx.fillRect(0, 0, uvCanvas.width, uvCanvas.height);
-
-                // 2. Grid
                 drawGrid();
 
-                // 3. Masked Texture
                 if (textureImage) {
                     const maskedCanvas = getMaskedTextureCanvas();
                     ctx.drawImage(maskedCanvas, 0, 0);
                 }
 
-                // 4. Wireframe overlay
                 drawWireframe();
-
-                // 5. Handles
                 drawTransformHandles();
             };
 
             const updateModelTexture = () => {
-                // Get the masked texture (transparent outside UVs)
                 const maskedCanvas = getMaskedTextureCanvas();
-
                 const texture = new THREE.CanvasTexture(maskedCanvas);
                 texture.flipY = false;
                 texture.colorSpace = THREE.SRGBColorSpace;
@@ -267,7 +271,15 @@ function drawUVMaps(uvMapInfo) {
                     if (child.isMesh && child.geometry === meshInfo.geometry) {
                         child.material = child.material.clone();
                         child.material.map = texture;
-                        child.material.transparent = true; // Use transparency
+                        child.material.transparent = true;
+
+                        // Z-Layer Priority System
+                        child.material.polygonOffset = true;
+                        child.material.polygonOffsetFactor = -1 * textureTransform.zLayer; // Negative pulls towards camera
+                        child.material.polygonOffsetUnits = -1 * textureTransform.zLayer;
+                        child.material.depthTest = true;
+                        child.material.depthWrite = true;
+
                         child.material.needsUpdate = true;
                     }
                 });
@@ -283,44 +295,34 @@ function drawUVMaps(uvMapInfo) {
 
             const checkHandleHit = (mouseX, mouseY) => {
                 if (!textureImage) return null;
-
                 const halfSize = (uvCanvas.width / 2) * textureTransform.scale;
                 const handleSize = 12;
-
                 const dx = mouseX - textureTransform.x;
                 const dy = mouseY - textureTransform.y;
                 const angle = -textureTransform.rotation * Math.PI / 180;
                 const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
                 const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
-
                 const rotHandleY = -halfSize - 30;
                 const distToRot = Math.sqrt(localX * localX + (localY - rotHandleY) * (localY - rotHandleY));
                 if (distToRot < 12) return 'rotate';
-
                 const corners = [
                     { x: -halfSize, y: -halfSize, name: 'tl' },
                     { x: halfSize, y: -halfSize, name: 'tr' },
                     { x: halfSize, y: halfSize, name: 'br' },
                     { x: -halfSize, y: halfSize, name: 'bl' }
                 ];
-
                 for (const corner of corners) {
                     if (Math.abs(localX - corner.x) < handleSize && Math.abs(localY - corner.y) < handleSize) {
                         return 'scale-' + corner.name;
                     }
                 }
-
-                if (Math.abs(localX) < halfSize && Math.abs(localY) < halfSize) {
-                    return 'drag';
-                }
-
+                if (Math.abs(localX) < halfSize && Math.abs(localY) < halfSize) return 'drag';
                 return null;
             };
 
             uvCanvas.addEventListener('mousedown', (e) => {
                 const pos = getMousePos(e);
                 const handle = checkHandleHit(pos.x, pos.y);
-
                 if (handle === 'drag') {
                     isDragging = true;
                     dragStart = { x: pos.x - textureTransform.x, y: pos.y - textureTransform.y };
@@ -342,7 +344,6 @@ function drawUVMaps(uvMapInfo) {
 
             uvCanvas.addEventListener('mousemove', (e) => {
                 const pos = getMousePos(e);
-
                 if (isDragging) {
                     textureTransform.x = pos.x - dragStart.x;
                     textureTransform.y = pos.y - dragStart.y;
@@ -365,45 +366,28 @@ function drawUVMaps(uvMapInfo) {
                     updateModelTexture();
                 } else {
                     const handle = checkHandleHit(pos.x, pos.y);
-                    if (handle === 'drag') {
-                        uvCanvas.style.cursor = 'move';
-                    } else if (handle && handle.startsWith('scale')) {
-                        uvCanvas.style.cursor = 'nwse-resize';
-                    } else if (handle === 'rotate') {
-                        uvCanvas.style.cursor = 'grab';
-                    } else {
-                        uvCanvas.style.cursor = 'default';
-                    }
+                    if (handle === 'drag') uvCanvas.style.cursor = 'move';
+                    else if (handle && handle.startsWith('scale')) uvCanvas.style.cursor = 'nwse-resize';
+                    else if (handle === 'rotate') uvCanvas.style.cursor = 'grab';
+                    else uvCanvas.style.cursor = 'default';
                 }
             });
 
-            uvCanvas.addEventListener('mouseup', () => {
-                isDragging = false;
-                isScaling = false;
-                isRotating = false;
-                uvCanvas.style.cursor = 'default';
-            });
+            uvCanvas.addEventListener('mouseup', () => { isDragging = false; isScaling = false; isRotating = false; uvCanvas.style.cursor = 'default'; });
+            uvCanvas.addEventListener('mouseleave', () => { isDragging = false; isScaling = false; isRotating = false; uvCanvas.style.cursor = 'default'; });
 
-            uvCanvas.addEventListener('mouseleave', () => {
-                isDragging = false;
-                isScaling = false;
-                isRotating = false;
-                uvCanvas.style.cursor = 'default';
-            });
-
-            // Initial Draw
+            // Draw initial state
             redrawCanvas();
 
+            // Controls Container
+            const controlsContainer = document.createElement('div');
+            controlsContainer.className = 'controls-container';
+
+            // File Input
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
             fileInput.accept = 'image/*';
             fileInput.className = 'uv-file-input';
-
-            const uploadBtn = document.createElement('button');
-            uploadBtn.className = 'uv-upload-btn';
-            uploadBtn.innerHTML = '📁 Upload Texture';
-            uploadBtn.onclick = () => fileInput.click();
-
             fileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -412,23 +396,14 @@ function drawUVMaps(uvMapInfo) {
                         const img = new Image();
                         img.onload = () => {
                             textureImage = img;
-                            textureTransform = {
-                                scale: 1,
-                                rotation: 0,
-                                x: uvCanvas.width / 2,
-                                y: uvCanvas.height / 2
-                            };
-
+                            textureTransform.scale = 1;
+                            textureTransform.rotation = 0;
+                            textureTransform.x = uvCanvas.width / 2;
+                            textureTransform.y = uvCanvas.height / 2;
                             redrawCanvas();
                             updateModelTexture();
-
                             uploadBtn.innerHTML = '✅ Texture Loaded';
-                            uploadBtn.style.background = 'linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%)';
-
-                            setTimeout(() => {
-                                uploadBtn.innerHTML = '📁 Change Texture';
-                                uploadBtn.style.background = '';
-                            }, 2000);
+                            setTimeout(() => { uploadBtn.innerHTML = '📁 Change Texture'; }, 2000);
                         };
                         img.src = event.target.result;
                     };
@@ -436,15 +411,17 @@ function drawUVMaps(uvMapInfo) {
                 }
             });
 
-            // Save Texture Button
+            // Buttons
+            const uploadBtn = document.createElement('button');
+            uploadBtn.className = 'uv-upload-btn';
+            uploadBtn.innerHTML = '📁 Upload Texture';
+            uploadBtn.onclick = () => fileInput.click();
+
             const saveBtn = document.createElement('button');
             saveBtn.className = 'uv-save-btn';
-            saveBtn.innerHTML = '� Save Texture';
+            saveBtn.innerHTML = '💾 Save Texture';
             saveBtn.onclick = () => {
-                if (!textureImage) {
-                    alert('Please upload a texture first!');
-                    return;
-                }
+                if (!textureImage) { alert('Please upload a texture first!'); return; }
                 const maskedCanvas = getMaskedTextureCanvas();
                 const link = document.createElement('a');
                 link.download = `${meshInfo.name}_texture_masked.png`;
@@ -457,9 +434,11 @@ function drawUVMaps(uvMapInfo) {
             clearBtn.innerHTML = '🗑️ Clear';
             clearBtn.onclick = () => {
                 textureImage = null;
-                textureTransform = { scale: 1, rotation: 0, x: uvCanvas.width / 2, y: uvCanvas.height / 2 };
+                textureTransform.scale = 1;
+                textureTransform.rotation = 0;
+                textureTransform.x = uvCanvas.width / 2;
+                textureTransform.y = uvCanvas.height / 2;
                 redrawCanvas();
-
                 model.traverse((child) => {
                     if (child.isMesh && child.geometry === meshInfo.geometry) {
                         if (child.material.userData.originalMaterial) {
@@ -468,7 +447,6 @@ function drawUVMaps(uvMapInfo) {
                         }
                     }
                 });
-
                 fileInput.value = '';
                 uploadBtn.innerHTML = '📁 Upload Texture';
             };
@@ -476,10 +454,43 @@ function drawUVMaps(uvMapInfo) {
             const buttonContainer = document.createElement('div');
             buttonContainer.className = 'uv-button-container';
             buttonContainer.appendChild(uploadBtn);
-            buttonContainer.appendChild(saveBtn); // Add save button
+            buttonContainer.appendChild(saveBtn);
             buttonContainer.appendChild(clearBtn);
             buttonContainer.appendChild(fileInput);
-            wrapper.appendChild(buttonContainer);
+            controlsContainer.appendChild(buttonContainer);
+
+            // Z-Layer Control
+            const zLayerContainer = document.createElement('div');
+            zLayerContainer.className = 'z-layer-container';
+            zLayerContainer.innerHTML = `
+                <label>Layer Priority (Z-Index):</label>
+                <div class="z-layer-controls">
+                    <button id="z-dec-${meshIdx}-${channelIdx}">-</button>
+                    <span id="z-val-${meshIdx}-${channelIdx}">${textureTransform.zLayer}</span>
+                    <button id="z-inc-${meshIdx}-${channelIdx}">+</button>
+                </div>
+            `;
+            controlsContainer.appendChild(zLayerContainer);
+
+            // Handle Z-Layer Click logic after appending
+            setTimeout(() => {
+                const decBtn = document.getElementById(`z-dec-${meshIdx}-${channelIdx}`);
+                const incBtn = document.getElementById(`z-inc-${meshIdx}-${channelIdx}`);
+                const valSpan = document.getElementById(`z-val-${meshIdx}-${channelIdx}`);
+
+                decBtn.onclick = () => {
+                    textureTransform.zLayer--;
+                    valSpan.textContent = textureTransform.zLayer;
+                    if (textureImage) updateModelTexture();
+                };
+                incBtn.onclick = () => {
+                    textureTransform.zLayer++;
+                    valSpan.textContent = textureTransform.zLayer;
+                    if (textureImage) updateModelTexture();
+                };
+            }, 0);
+
+            wrapper.appendChild(controlsContainer);
 
             const hint = document.createElement('div');
             hint.className = 'uv-hint';

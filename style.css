@@ -488,3 +488,60 @@ body {
         gap: 0.25rem;
     }
 }
+/* Z-Layer Controls */
+.z-layer-container {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1rem;
+}
+
+.z-layer-container label {
+    font-size: 0.75rem;
+    color: #ccc;
+    font-weight: 600;
+}
+
+.z-layer-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.z-layer-controls button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.z-layer-controls button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 8px rgba(102, 126, 234, 0.5);
+}
+
+.z-layer-controls span {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #00d2ff;
+    width: 24px;
+    text-align: center;
+    text-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
+}
