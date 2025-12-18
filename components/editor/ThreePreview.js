@@ -65,20 +65,12 @@ export default function ThreePreview() {
       ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2)
       ctx.fill()
 
-      // Rotate canvas to make text horizontal when mapped to circle
-      ctx.save()
-      ctx.translate(size/2, size/2)
-      ctx.rotate(-Math.PI / 2)  // Rotate 90 degrees counter-clockwise
-      ctx.translate(-size/2, -size/2)
-
-      // Draw text (now horizontal on the podium, positioned lower)
+      // Draw text at front of podium (no rotation needed for horizontal text)
       ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
       ctx.font = 'bold 48px Arial, sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(text, size/2, size * 0.65)
-      
-      ctx.restore()
+      ctx.fillText(text, size/2, size * 0.65)  // Position at front edge (85% down)
 
       // Create texture from canvas
       const texture = new THREE.CanvasTexture(canvas)
