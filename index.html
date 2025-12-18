@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Model Viewer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎮 3D Model Viewer</h1>
+            <p class="subtitle">Roblox Blocky Model Explorer</p>
+        </div>
+
+        <div class="viewer-container">
+            <canvas id="canvas"></canvas>
+
+            <div class="controls-panel">
+                <div class="control-group">
+                    <label>Background</label>
+                    <div class="color-options">
+                        <button class="color-btn active" data-color="#0a0a0a" style="background: #0a0a0a;"></button>
+                        <button class="color-btn" data-color="#1a1a2e" style="background: #1a1a2e;"></button>
+                        <button class="color-btn" data-color="#2d3436" style="background: #2d3436;"></button>
+                        <button class="color-btn" data-color="#ffffff" style="background: #ffffff;"></button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Rotation</label>
+                    <button id="toggleRotation" class="action-btn">
+                        <span id="rotationIcon">⏸</span> Pause
+                    </button>
+                </div>
+
+                <div class="control-group">
+                    <label>Reset View</label>
+                    <button id="resetCamera" class="action-btn">
+                        🎯 Reset Camera
+                    </button>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="info-item">
+                    <span class="label">Model:</span>
+                    <span class="value">roblox_model_blocky.glb</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Controls:</span>
+                    <span class="value">Left Click + Drag to Rotate • Scroll to Zoom • Right Click + Drag to Pan</span>
+                </div>
+            </div>
+
+            <!-- UV Map Display Container -->
+            <div id="uvCanvasContainer" class="uv-container"></div>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading 3D Model...</p>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="script.js"></script>
+</body>
+
+</html>
