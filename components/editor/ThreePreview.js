@@ -34,6 +34,73 @@ export default function ThreePreview() {
     blocky: '/models/roblox_model_blocky.glb'
   }
 
+  /**
+   * Creates a base/podium mesh for the 3D character
+   * @param {THREE.Scene} scene - The Three.js scene to add the podium to
+   * @param {string} logoText - Text to display on the podium top (like a logo)
+   */
+  const createBasePodium = (scene, logoText = 'custom use') => {
+    // Use CircleGeometry instead of Cylinder - flat disc with no sides
+    const radius = 2
+    const segments = 64
+    const geometry = new THREE.CircleGeometry(radius, segments)
+
+    // Create canvas texture with text logo
+    const createTextTexture = (text) => {
+      const canvas = document.createElement('canvas')
+      const size = 512  // Texture resolution
+      canvas.width = size
+      canvas.height = size
+      const ctx = canvas.getContext('2d')
+
+      // Transparent background
+      ctx.clearRect(0, 0, size, size)
+
+      // Draw circular gradient background (optional, for subtle effect)
+      const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2)
+      gradient.addColorStop(0, 'rgba(60, 60, 60, 0.3)')
+      gradient.addColorStop(1, 'rgba(30, 30, 30, 0.1)')
+      ctx.fillStyle = gradient
+      ctx.beginPath()
+      ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Draw text at front of podium (no rotation needed for horizontal text)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
+      ctx.font = 'bold 48px Arial, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(text, size/2, size * 0.65)  // Position at front edge (85% down)
+
+      // Create texture from canvas
+      const texture = new THREE.CanvasTexture(canvas)
+      texture.colorSpace = THREE.SRGBColorSpace
+      return texture
+    }
+
+    // Single material for flat circle (only visible from top)
+    const material = new THREE.MeshStandardMaterial({
+      map: createTextTexture(logoText),
+      transparent: true,
+      opacity: 0.9,
+      roughness: 0.6,
+      metalness: 0.1,
+      side: THREE.FrontSide  // Only visible from top, hidden from below
+    })
+
+    const podiumMesh = new THREE.Mesh(geometry, material)
+
+    // Rotate to lay flat (circle is vertical by default)
+    podiumMesh.rotation.x = -Math.PI / 2
+
+    // Position below the character's feet
+    podiumMesh.position.set(0, -0.20, 0)
+    podiumMesh.receiveShadow = true
+
+    scene.add(podiumMesh)
+    return podiumMesh
+  }
+
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -66,6 +133,9 @@ export default function ThreePreview() {
         const dirLight = new THREE.DirectionalLight(0xffffff, 1.5)
         dirLight.position.set(2, 5, 5)
         scene.add(dirLight)
+
+        // Add Base Podium with text logo
+        createBasePodium(scene, 'custom use')
 
         // Textures
         const textureShirt = new THREE.Texture()
